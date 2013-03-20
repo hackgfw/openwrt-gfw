@@ -119,7 +119,7 @@ if [ "$PPP_IFACE" == "pptp-wall" ]; then
 fi
 ```
 
-该脚本会在vpn建立时执行，建立必要的ipset、iptables、ip route及rule规则，只有目标端口为80,443,1935的流量才会走vpn，否则即使发往国外，也走本地线路。
+该脚本会在vpn建立时执行，建立必要的ipset、iptables、ip route及rule规则，只有目标端口为80,443,1935的流量才会走vpn，否则即使发往国外，也走本地线路。**注：如果你没有根据 [AntiDNSPoisoning](AntiDNSPoisoning.md) 设置防 DNS 污染，则这里需要把 udp 53 端口加进来并使用国外VPN**
 
  * **创建 /etc/ppp/ip-down.d/ip-down-wall ，将该文件设置成可执行，并输入如下内容**
 
