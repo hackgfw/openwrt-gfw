@@ -33,7 +33,7 @@ config 'interface' 'wall'
 ```
 config zone
         option name             wan
-        option network          'wan''
+        option network          'wan'
         option input            REJECT
         option output           ACCEPT
         option forward          REJECT
