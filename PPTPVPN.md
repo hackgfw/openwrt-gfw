@@ -1,14 +1,17 @@
 # 介绍
 该文章介绍如何通过VPN翻墙的同时又能使用本地线路访问国内网络
 
+
 # 前期准备
  * 一台Openwrt路由器
  * 安装 pptp 客户端 (opkg install pptp)
  * 安装 iproute2 (opkg install ip)
  * 安装 ipset 及 iptables 的 ipset 及对应的内核模块 (opkg install ipset iptables-mod-ipset kmod-ipt-ipset)
 
+
 # 原理
 通过策略路由根据目标/源ip及目标端口来决定走vpn线路还是本地线路。将中国ip加入特定的 ipset 中， 在数据包通过 iptables mangle 表时根据源/目标ip及目标端口判断是否走vpn，并打上mark。使用ip rule设定规则，不同的 mark 走不同的路由表，从而实现访问国内ip使用本地线路，访问外国网站使用vpn线路。同时因为使用了目标端口做限定条件，p2p流量即使发往国外，也走的本地线路
+
 
 # 解决方法
  * **在 /etc/config/network 中添加vpn连接**
@@ -23,7 +26,7 @@ config 'interface' 'wall'
         option 'auto' '1'
 ```
 
-注意上面defaultroute设为0，因为之后会通过脚本添加路由，所以这里不开启默认路由
+替换上面的 server,username,password 为vpn服务器地址、用户名及密码，另外注意上面defaultroute设为0，因为之后会通过脚本添加路由，所以这里不开启默认路由
 
  * **在 /etc/config/firewall 的wan区域中加入vpn接口，找到类似**
 
@@ -137,6 +140,7 @@ fi
 
 该脚本会在vpn断开时执行，删除必要的iptables、ip route及rule规则
 
-后记
+
+# 后记
  * 上述脚本在每个数据包通过时都会判断条件，也许修改成仅在连接建立的时候判断条件并使用 CONNMARK 来标记连接可以提高性能，不过该脚本在TP-Link WR841N上运行并没有遇到性能问题，因此也没有试过 CONNMARK 是否可行
  * **注：如果你同时还在使用multiwan的话可能需要修改上面的mark以 兼容multiwan**
