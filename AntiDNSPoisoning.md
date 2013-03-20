@@ -3,7 +3,7 @@
 该文章介绍如何通过判断并丢弃包含特征IP的DNS包来防止DNS污染，但是又不会失去本地DNS的CDN加速功能，而且还不需要VPN。
 
 
-## 前期准备
+# 前期准备
   * 一台Openwrt路由器
   * 使用dnsmasq作为Openwrt的dns服务器
   * 安装 dig (opkg install bind-dig bind-libs)
