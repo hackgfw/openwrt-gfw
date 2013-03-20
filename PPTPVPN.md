@@ -46,7 +46,7 @@ config zone
 ```
 config zone
         option name             wan
-        option network          'wan wall''
+        option network          'wan wall'
         option input            REJECT
         option output           ACCEPT
         option forward          REJECT
