@@ -58,7 +58,7 @@ all-servers
 
  * **创建 /etc/protectdns.sh ，将该文件设置成可执行，并输入如下内容**
 
-```
+```bash
 #!/bin/sh
 
 POSIONEDDOMAIN="www.twitter.com twitter.com www.facebook.com facebook.com www.youtube.com youtube.com encrypted.google.com plus.google.com www.appspot.com appspot.com www.openvpn.net openvpn.net forums.openvpn.net svn.openvpn.net shell.cjb.net"
@@ -118,7 +118,7 @@ config include
  以便在防火墙重启后重新添加规则
  * **创建启动脚本 /etc/init.d/protectdns 以便随系统自动启动**
 
-```
+```bash
 #!/bin/sh /etc/rc.common
 
 START=99
