@@ -151,3 +151,4 @@ stop() {
 
 # 后记
  * 如果你使用VPN，而且VPN服务器推送DNS的话，可以不修改/etc/config/resolv.conf 和 /etc/config/dhcp，dnsmasq会自动使用本地DNS和VPN推送的DNS
+ * 从目前的趋势看，估计GFW以后很有可能会在骨干路由上直接丢弃国外DNS返回的正确数据包，导致无法收到正确的DNS结果。如果这项功能正式部署，可以通过VPN发送DNS请求，以上提到的防止DNS污染的同时又不会失去本地DNS的CDN加速功能依然能够实现，只不过需要一条VPN连接来联系国外DNS服务器。
