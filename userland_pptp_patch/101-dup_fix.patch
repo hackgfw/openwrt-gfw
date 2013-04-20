@@ -1,0 +1,12 @@
+--- a/pqueue.c
++++ b/pqueue.c
+@@ -136,7 +136,8 @@ int pqueue_add (int seq, unsigned char *
+   for (point = pq_head; point != NULL; point = point->next) {
+     if (point->seq == seq) {
+       // queue already contains this packet
+-      warn("discarding duplicate packet %d", seq);
++      //warn("discarding duplicate packet %d", seq);
++      free(newent);
+       return -1;
+     }
+     if (point->seq > seq) {

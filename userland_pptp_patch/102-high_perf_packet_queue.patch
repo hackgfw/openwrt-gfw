@@ -1,0 +1,288 @@
+--- a/pqueue.c
++++ b/pqueue.c
+@@ -7,33 +7,96 @@
+ #include "pqueue.h"
+ 
+ #ifdef DEBUG_PQUEUE
+-#define DEBUG_ON 1
++#define DEBUG_CMD(_a) { _a }
+ #else
+-#define DEBUG_ON 0
++#define DEBUG_CMD(_a)
+ #endif
+ 
+-#define DEBUG_CMD(_a) if (DEBUG_ON) { _a }
+-
+-
+ #define MIN_CAPACITY 128 /* min allocated buffer for a packet */
+ 
+-static int pqueue_alloc (int seq, unsigned char *packet, int packlen, pqueue_t **new);
++static int pqueue_alloc (u_int32_t seq, unsigned char *packet, int packlen, pqueue_t **new);
+ 
+ int packet_timeout_usecs = DEFAULT_PACKET_TIMEOUT * 1000000;
+ 
+ 
+-static pqueue_t *pq_head = NULL, *pq_tail = NULL;
++static pqueue_t *pq_ring_buff[MISSING_WINDOW] = { NULL };
++static int pq_ring_pos=0;
++static int pq_ring_count=0;
++static u_int32_t pq_last_seq=0;
+ 
+ /* contains a list of free queue elements.*/
+ static pqueue_t *pq_freelist_head = NULL;
+ 
+ 
++static inline void pqueue_free (pqueue_t *point) {
++  if (point == NULL) return;
++  /* add point to the freelist */
++  point->next = pq_freelist_head;
++  point->prev = NULL;
++
++  if (point->next)
++    point->next->prev = point;
++  pq_freelist_head = point;
++}
++
++static inline int pqueue_recalc_ring(u_int32_t recv_seq) {
++  int i,pos;
++  u_int32_t seq_diff;
++  seq_diff=recv_seq - pq_last_seq;
++  if (seq_diff == 0) return 0;
++  if ((seq_diff & 0x80000000) != 0) {
++    warn("recv_seq %u less then last one %u", recv_seq, pq_last_seq);
++    return -1;
++  }
++  for (i=0;i<seq_diff;i++) {
++    pos=(pq_ring_pos + i) % MISSING_WINDOW;
++    if (pq_ring_buff[pos] != NULL) {
++      pqueue_free(pq_ring_buff[pos]);
++      pq_ring_buff[pos]=NULL;
++      pq_ring_count--;
++    }
++  }
++  pq_ring_pos=(pq_ring_pos + seq_diff) % MISSING_WINDOW;
++  pq_last_seq=recv_seq;
++  return 0;
++}
++
++static inline pqueue_t * pqueue_find(u_int32_t recv_seq, u_int32_t seq) {
++  u_int32_t seq_diff;
++  if (pqueue_recalc_ring(recv_seq) != 0) return NULL;
++  seq_diff=seq - recv_seq - 1;
++  if (seq_diff >= MISSING_WINDOW) {
++    warn("seq %u overflow recv_seq %u", seq, recv_seq);
++    return NULL;
++  }
++  return pq_ring_buff[(pq_ring_pos + seq_diff) % MISSING_WINDOW];
++}
++
++static inline int pqueue_set(u_int32_t recv_seq, u_int32_t seq, pqueue_t * point) {
++  u_int32_t seq_diff;
++  int pos;
++  if (pqueue_recalc_ring(recv_seq) != 0) return -1;
++  seq_diff=seq - recv_seq - 1;
++  if (seq_diff >= MISSING_WINDOW) {
++    warn("seq %u overflow recv_seq %u", seq, recv_seq);
++    return -1;
++  }
++  pos=(pq_ring_pos + seq_diff) % MISSING_WINDOW;
++  if (pq_ring_buff[pos] != NULL) {
++    if (point != NULL) warn("overwrite seq %u", seq);
++    else pq_ring_count--;
++    pqueue_free(pq_ring_buff[pos]);
++  }
++  else if (point != NULL) pq_ring_count++;
++  pq_ring_buff[pos]=point;
++  return 0;
++}
+ 
+-static int pqueue_alloc(int seq, unsigned char *packet, int packlen, pqueue_t **new) {
++static int pqueue_alloc(u_int32_t seq, unsigned char *packet, int packlen, pqueue_t **new) {
+ 
+   pqueue_t *newent;
+ 
+-  DEBUG_CMD(log("seq=%d, packlen=%d", seq, packlen););
++  DEBUG_CMD(log("seq=%u, packlen=%d", seq, packlen););
+ 
+   /* search the freelist for one that has sufficient space  */
+   if (pq_freelist_head) {
+@@ -125,79 +188,37 @@ static int pqueue_alloc(int seq, unsigne
+ 
+ 
+ 
+-int pqueue_add (int seq, unsigned char *packet, int packlen) {
+-  pqueue_t *newent, *point;
++int pqueue_add (u_int32_t recv_seq, u_int32_t seq, unsigned char *packet, int packlen) {
++  pqueue_t *newent;
++
++  /* queue already contains this packet*/
++  if ( pqueue_find(recv_seq, seq) != NULL) return -1;
+ 
+   /* get a new entry */
+   if ( 0 != pqueue_alloc(seq, packet, packlen, &newent) ) {
+     return -1;
+   }
+ 
+-  for (point = pq_head; point != NULL; point = point->next) {
+-    if (point->seq == seq) {
+-      // queue already contains this packet
+-      //warn("discarding duplicate packet %d", seq);
+-      free(newent);
+-      return -1;
+-    }
+-    if (point->seq > seq) {
+-      // gone too far: point->seq > seq and point->prev->seq < seq
+-      if (point->prev) {
+-	// insert between point->prev and point
+-	DEBUG_CMD(log("adding %d between %d and %d", 
+-		      seq, point->prev->seq, point->seq););
+-
+-	point->prev->next = newent;
+-      } else {
+-	// insert at head of queue, before point
+-	DEBUG_CMD(log("adding %d before %d", seq, point->seq););
+-	pq_head = newent;
+-      }
+-      newent->prev = point->prev; // will be NULL, at head of queue
+-      newent->next = point;
+-      point->prev = newent;
+-      return 0;
+-    }
+-  }
+-
+-  /* We didn't find anywhere to insert the packet,
+-   * so there are no packets in the queue with higher sequences than this one,
+-   * so all the packets in the queue have lower sequences,
+-   * so this packet belongs at the end of the queue (which might be empty)
+-   */
+-  
+-  if (pq_head == NULL) {
+-    DEBUG_CMD(log("adding %d to empty queue", seq););
+-    pq_head = newent;
+-  } else {
+-    DEBUG_CMD(log("adding %d as tail, after %d", seq, pq_tail->seq););
+-    pq_tail->next = newent;
++  if (pqueue_set(recv_seq, seq, newent) != 0) {
++    pqueue_free(newent);
++    return -1;
+   }
+-  newent->prev = pq_tail;
+-  pq_tail = newent;
+-
+   return 0;
+ }
+ 
+ 
+ 
+-int pqueue_del (pqueue_t *point) {
++int pqueue_del (u_int32_t recv_seq, pqueue_t *point) {
+ 
+-  DEBUG_CMD(log("Move seq %d to freelist", point->seq););
++  DEBUG_CMD(log("Move seq %u to freelist", point->seq););
+ 
+   /* unlink from pq */
+-  if (pq_head == point) pq_head = point->next;
+-  if (pq_tail == point) pq_tail = point->prev;
+-  if (point->prev) point->prev->next = point->next;
+-  if (point->next) point->next->prev = point->prev;
+-
+-  /* add point to the freelist */
+-  point->next = pq_freelist_head;
+-  point->prev = NULL;
+-
+-  if (point->next)
+-    point->next->prev = point;
+-  pq_freelist_head = point;
++  if (recv_seq - point->seq < 0x80000000) {
++    pqueue_recalc_ring(recv_seq);
++  }
++  else if (pqueue_set(recv_seq, point->seq, NULL) != 0) {
++    pqueue_free(point);
++  }
+ 
+   DEBUG_CMD(
+     int pq_count = 0;
+@@ -218,8 +239,16 @@ int pqueue_del (pqueue_t *point) {
+ 
+ 
+ 
+-pqueue_t *pqueue_head () {
+-  return pq_head;
++pqueue_t *pqueue_head (u_int32_t recv_seq) {
++  int i,pos;
++  if (pqueue_recalc_ring(recv_seq) != 0) return NULL;
++  if (pq_ring_count == 0) return NULL;
++  for (i=0;i<MISSING_WINDOW;i++) {
++    pos=(pq_ring_pos + i) % MISSING_WINDOW;
++    if (pq_ring_buff[pos] != NULL) return pq_ring_buff[pos];
++  }
++  warn("pq_ring_count %d != 0 but pq_ring_buff is all null", pq_ring_count);
++  return NULL;
+ }
+ 
+ 
+--- a/pqueue.h
++++ b/pqueue.h
+@@ -15,16 +15,16 @@ extern int packet_timeout_usecs;
+ typedef struct pqueue {
+   struct pqueue *next;
+   struct pqueue *prev;
+-  int seq;
++  u_int32_t seq;
+   struct timeval expires;
+   unsigned char *packet;
+   int packlen;
+   int capacity;
+ } pqueue_t;
+ 
+-int       pqueue_add  (int seq, unsigned char *packet, int packlen);
+-int       pqueue_del  (pqueue_t *point);
+-pqueue_t *pqueue_head ();
++int       pqueue_add  (u_int32_t recv_seq, u_int32_t seq, unsigned char *packet, int packlen);
++int       pqueue_del  (u_int32_t recv_seq, pqueue_t *point);
++pqueue_t *pqueue_head (u_int32_t recv_seq);
+ int       pqueue_expiry_time (pqueue_t *entry);
+ 
+ #endif /* PQUEUE_H */
+--- a/pptp_gre.c
++++ b/pptp_gre.c
+@@ -140,7 +140,7 @@ void pptp_gre_copy(u_int16_t call_id, u_
+          * If there is a packet in the queue, then don't wait longer than
+          * the time remaining until it expires.
+          */
+-        head = pqueue_head();
++        head = pqueue_head(seq_recv);
+         if (head != NULL) {
+             int expiry_time = pqueue_expiry_time(head);
+             if (block_usecs == -1 || expiry_time < block_usecs)
+@@ -410,7 +410,7 @@ int decaps_gre (int fd, callback_t callb
+             stats.rx_lost += seq - seq_recv - 1;
+             return callback(cl, buffer + ip_len + headersize, payload_len);
+         } else {
+-            pqueue_add(seq, buffer + ip_len + headersize, payload_len);
++            pqueue_add(seq_recv, seq, buffer + ip_len + headersize, payload_len);
+ 	}
+     /* no, packet must be discarded */
+     } else {
+@@ -429,7 +429,7 @@ int dequeue_gre (callback_t callback, in
+     int status;
+     /* process packets in the queue that either are expected or have 
+      * timed out. */
+-    head = pqueue_head();
++    head = pqueue_head(seq_recv);
+     while ( head != NULL &&
+             ( (head->seq == seq_recv + 1) || /* wrap-around safe */ 
+               (pqueue_expiry_time(head) <= 0) 
+@@ -445,10 +445,10 @@ int dequeue_gre (callback_t callback, in
+             log("accepting %d from queue", head->seq);
+         seq_recv = head->seq;
+         status = callback(cl, head->packet, head->packlen);
+-        pqueue_del(head);
++        pqueue_del(seq_recv, head);
+         if (status < 0)
+             return status;
+-        head = pqueue_head();
++        head = pqueue_head(seq_recv);
+     }
+     return 0;
+ }
