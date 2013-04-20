@@ -5,7 +5,7 @@
 # 前期准备
  * 两台国外服务器，均需要有root权限以修改服务器设置。OpenVZ服务器即可，不过需要OpenVZ加载对应的 内核模块。另外还需要公网ip或位于Stateless NAT后，即只映射ip而不改变端口（例如ec2的NAT）
  * 一台Openwrt路由器且必须能取得公网IP (位于Stateless NAT后或许也可以，不过未测试过)
- * 安装 pptp 客户端 (opkg install pptp) (这里指的是 http://pptpclient.sourceforge.net/ ，新版Openwrt使用的是内核pptp，不确定是否同样适用)
+ * 安装 pptp 客户端 (opkg install pptp) (这里指的是 http://pptpclient.sourceforge.net/ ，新版Openwrt使用的是内核pptp，需要给内核打补丁，详见)
  * 安装 iptables 的 u32 模块及对应的内核模块 (opkg install iptables-mod-u32 kmod-ipt-u32)
  * 安装 iptables 的 tee 模块及对应的内核模块 (opkg install iptables-mod-tee kmod-ipt-tee) (该模块是2.6.35版引入内核的，如果使用旧版内核的话也许可以用 http://xtables-addons.sourceforge.net/ 不过本人并未测试过)
 
@@ -36,10 +36,10 @@
 ```
 可以在调用pptp时指定 --timeout 参数以调整缓存时间
 
-**注：新版的openwrt 12.09使用的是内核pptp，我没有查源码，不确定该文章是否依然适用，不过鉴于[wiki](http://wiki.openwrt.org/doc/uci/network#protocol.pptp.point-to-point.tunneling.protocol)中有提到buffering，因此我估计该文可能同样适用**
-
 
 # 解决方法
+Update 1：简化了辅VPN上的脚本,允许多个主VPN共用同一个辅VPN
+
 注：双线VPN是去年为玩D3而建的，因此下面脚本均以D3所用端口为例，如需改成上网请参照 [PPTPVPN](PPTPVPN.md)。
  * **修改所有主机（主/辅VPN服务器和Openwrt）上的 /etc/sysctl.conf 加入**
 
@@ -212,7 +212,7 @@ sdual           *       password                   10.66.4.67
 cdual           *       password                   10.66.4.65
 ```
 上面的password是密码,可以替换成其他值,不过需要保持和主VPN及客户端的密码一致
- * **在辅VPN服务器上创建 /etc/ppp/ip-up.d/ip-up-sdual ，将该文件设置成可执行，并输入如下内容**
+ * **在辅VPN服务器上创建 /etc/ppp/ip-up.d/ip-up-dual ，将该文件设置成可执行，并输入如下内容**
 
 ```bash
 #!/bin/bash
@@ -225,24 +225,24 @@ PPP_LOCAL="$4";
 PPP_REMOTE="$5";
 PPP_IPPARAM="$6";
 
-sdual() {
-        CHKIPROUTE=$(grep sdual /etc/iproute2/rt_tables)
+dual() {
+        CHKIPROUTE=$(grep dual /etc/iproute2/rt_tables)
         if [ -z "$CHKIPROUTE" ]; then
-                echo "76 sdual" >> /etc/iproute2/rt_tables
+                echo "30 dual" >> /etc/iproute2/rt_tables
         fi
 
         ifconfig $PPP_IFACE mtu 1448
 
-        iptables -t mangle -I PREROUTING -i $PPP_IFACE -j MARK --set-mark 0xf223
-        ip route add table sdual default via $PPP_LOCAL dev $PPP_IFACE
-        ip rule add fwmark 0xf221 table sdual priority 1
+        iptables -t mangle -I PREROUTING -i $PPP_IFACE -j MARK --set-mark 0xf222
+        ip route add table dual $PPP_IPPARAM via $PPP_LOCAL dev $PPP_IFACE
+        ip rule add fwmark 0xf222 table dual priority 2
 }
 
-if [ "$PPP_REMOTE" == "10.66.4.67" ]; then
-        sdual
+if [[ "$PPP_REMOTE" != "${PPP_REMOTE/10.66.4.6/}" ]]; then
+        dual
 fi
 ```
- * **在辅VPN服务器上创建 /etc/ppp/ip-down.d/ip-down-sdual ，将该文件设置成可执行，并输入如下内容**
+ * **在辅VPN服务器上创建 /etc/ppp/ip-down.d/ip-down-dual ，将该文件设置成可执行，并输入如下内容**
 
 ```bash
 #!/bin/bash
@@ -255,67 +255,14 @@ PPP_LOCAL="$4";
 PPP_REMOTE="$5";
 PPP_IPPARAM="$6";
 
-delsdual() {
-        iptables -t mangle -D PREROUTING -i $PPP_IFACE -j MARK --set-mark 0xf223
-        ip route del table sdual default
-        ip rule del priority 1
+deldual() {
+        iptables -t mangle -D PREROUTING -i $PPP_IFACE -j MARK --set-mark 0xf222
+        ip route del table dual $PPP_IPPARAM
+        ip rule del fwmark 0xf222 table dual priority 2
 }
 
-if [ "$PPP_REMOTE" == "10.66.4.67" ]; then
-        delsdual
-fi
-```
- * **在辅VPN服务器上创建 /etc/ppp/ip-up.d/ip-up-cdual ，将该文件设置成可执行，并输入如下内容**
-
-```bash
-#!/bin/bash
-
-# These variables are for the use of the scripts run by run-parts
-PPP_IFACE="$1";
-PPP_TTY="$2";
-PPP_SPEED="$3";
-PPP_LOCAL="$4";
-PPP_REMOTE="$5";
-PPP_IPPARAM="$6";
-
-cdual() {
-        CHKIPROUTE=$(grep cdual /etc/iproute2/rt_tables)
-        if [ -z "$CHKIPROUTE" ]; then
-                echo "72 cdual" >> /etc/iproute2/rt_tables
-        fi
-
-        ifconfig $PPP_IFACE mtu 1448
-
-        iptables -t mangle -I PREROUTING -i $PPP_IFACE -j MARK --set-mark 0xf221
-        ip route add table cdual default via $PPP_LOCAL dev $PPP_IFACE
-        ip rule add fwmark 0xf223 table cdual priority 2
-}
-
-if [ "$PPP_REMOTE" == "10.66.4.65" ]; then
-        cdual
-fi
-```
- * **在辅VPN服务器上创建 /etc/ppp/ip-down.d/ip-down-cdual ，将该文件设置成可执行，并输入如下内容**
-
-```bash
-#!/bin/bash
-
-# These variables are for the use of the scripts run by run-parts
-PPP_IFACE="$1";
-PPP_TTY="$2";
-PPP_SPEED="$3";
-PPP_LOCAL="$4";
-PPP_REMOTE="$5";
-PPP_IPPARAM="$6";
-
-delcdual() {
-        iptables -t mangle -D PREROUTING -i $PPP_IFACE -j MARK --set-mark 0xf221
-        ip route del table cdual default
-        ip rule del priority 2
-}
-
-if [ "$PPP_REMOTE" == "10.66.4.65" ]; then
-        delcdual
+if [[ "$PPP_REMOTE" != "${PPP_REMOTE/10.66.4.6/}" ]]; then
+        deldual
 fi
 ```
  * **在Openwrt上添加VPN连接，修改 /etc/config/network**
