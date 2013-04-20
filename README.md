@@ -5,6 +5,7 @@ openwrt-gfw
 * 不用VPN就能避免DNS污染，同时还能使用本地CDN: [AntiDNSPoisoning](AntiDNSPoisoning.md)
 * 通过VPN翻墙的同时又能使用本地线路访问国内网络: [PPTPVPN](PPTPVPN.md)
 * 使用双线VPN翻墙，即使其中一条线路断线也能正常翻墙，同时还能降低丢包率: [DualLinePPTPVPN](DualLinePPTPVPN.md)
+* 使用新版Openwrt提供的内核pptp提升性能，同时使其支持缓存数据包功能: [OptimizePPTPVPN](OptimizePPTPVPN.md)
 
 
 # 关于为何写该系列
