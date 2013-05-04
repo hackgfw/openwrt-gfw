@@ -5,7 +5,7 @@
 # 前期准备
  * 两台国外服务器，均需要有root权限以修改服务器设置。OpenVZ服务器即可，不过需要OpenVZ加载对应的 内核模块。另外还需要公网ip或位于Stateless NAT后，即只映射ip而不改变端口（例如ec2的NAT）
  * 一台Openwrt路由器且必须能取得公网IP (位于Stateless NAT后或许也可以，不过未测试过)
- * 安装 pptp 客户端 (opkg install pptp) (这里指的是 http://pptpclient.sourceforge.net/ ，新版Openwrt使用的是内核pptp，需要给内核打补丁，详见)
+ * 安装 pptp 客户端 (opkg install pptp) (这里指的是 http://pptpclient.sourceforge.net/ ，新版Openwrt使用的是内核pptp，需要给内核打补丁，详见[OptimizePPTPVPN](OptimizePPTPVPN.md))
  * 安装 iptables 的 u32 模块及对应的内核模块 (opkg install iptables-mod-u32 kmod-ipt-u32)
  * 安装 iptables 的 tee 模块及对应的内核模块 (opkg install iptables-mod-tee kmod-ipt-tee) (该模块是2.6.35版引入内核的，如果使用旧版内核的话也许可以用 http://xtables-addons.sourceforge.net/ 不过本人并未测试过)
 
