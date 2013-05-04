@@ -7,12 +7,12 @@
 
 # 解决方法
  * 首先为不想升级到内核pptp的同学提供3个补丁 [userland_pptp_patch](userland_pptp_patch) 如果你打算使用内核pptp可以跳过这部分
-其中 100-default_timeout.patch 修改了默认的超时时间和窗口大小，你可以根据具体需要再修改；101-dup_fix.patch修复了内存泄漏的问题；102-high_perf_packet_queue.patch优化了缓存数据包的算法，不过比起内核pptp，速度的瓶颈不在这里
+其中 [100-default_timeout.patch](userland_pptp_patch/100-default_timeout.patch) 修改了默认的超时时间和窗口大小，你可以根据具体需要再修改；[101-dup_fix.patch](userland_pptp_patch/101-dup_fix.patch)修复了内存泄漏的问题；[102-high_perf_packet_queue.patch](userland_pptp_patch/102-high_perf_packet_queue.patch)优化了缓存数据包的算法，不过比起内核pptp，速度的瓶颈不在这里
  * 其次我用的固件没有内核pptp的软件包，所以我将其backport到我目前用的固件上了 [ppp_package](ppp_package) 如果使用的是最新版Openwrt请跳过这部分
- * 最后就是最重要的[内核pptp](kernel_pptp_patch)及优化了：  
-989-pptp_add_seq_window.patch 为内核pptp加入了缓存数据包的功能，默认是最多缓存0.333秒和最多2048个包，如果你修改该值，请务必保证其为2的N次方，否则在序列号由0xffffffff变为0的时候会出bug。另外判断超时没有使用timer，而是需要有数据包到达，这么做的理由是如果数据包重要的话，对方也会重新发送的，即使对方不发，链路上的定时echo请求也会触发超时判断。  
-990-arc4_add_ecd.patch 和 991-arc4_use_u32_for_ctx.patch 是backport上游的修改到Openwrt 12.09所用的内核，提升了mppe加密的性能  
-992-arc4_openssl_high_perf.patch 是将openssl的加密代码移植到内核，加/解密性能提升在路由器上非常明显
+ * 最后就是最重要的内核pptp及优化了 [kernel_pptp_patch](kernel_pptp_patch)：  
+[989-pptp_add_seq_window.patch](kernel_pptp_patch/989-pptp_add_seq_window.patch) 为内核pptp加入了缓存数据包的功能，默认是最多缓存0.333秒和最多2048个包，如果你修改该值，请务必保证其为2的N次方，否则在序列号由0xffffffff变为0的时候会出bug。另外判断超时没有使用timer，而是需要有数据包到达，这么做的理由是如果数据包重要的话，对方也会重新发送的，即使对方不发，链路上的定时echo请求也会触发超时判断。  
+[990-arc4_add_ecd.patch](kernel_pptp_patch/990-arc4_add_ecd.patch) 和 [991-arc4_use_u32_for_ctx.patch](kernel_pptp_patch/991-arc4_use_u32_for_ctx.patch) 是backport上游的修改到Openwrt 12.09所用的内核，提升了mppe加密的性能  
+[992-arc4_openssl_high_perf.patch](kernel_pptp_patch/992-arc4_openssl_high_perf.patch) 是将openssl的加密代码移植到内核，加/解密性能提升在路由器上非常明显
 
 # 性能测试
 关于pptp在路由器上的性能：
@@ -45,7 +45,7 @@ AES-256: 189MBytes/s
 arc4: 761MBytes/s  
 
 
-以下测试是虚拟机ubuntu 12.04做VPN服务器（使用用户态pptp），虚拟机openwrt 12.09做客户端，raw表示不经过VPN直连，kvpn表示使用12.09自带的内核VPN，不打任何补丁，pkvpn表示使用打过989但是没有打990-992的内核pptp，以下速度均为在openwrt上测试的下载速度（tcp窗口大小256k）
+以下测试是虚拟机ubuntu 12.04做VPN服务器（使用用户态pptp），虚拟机openwrt 12.09做客户端，raw表示不经过VPN直连，kvpn表示使用12.09自带的内核VPN，不打任何补丁，pkvpn表示使用打过989但是没有打990-992补丁的内核pptp，以下速度均为在openwrt上测试的下载速度（tcp窗口大小256k）
 
 |                  |   raw   |  kvpn    |  pkvpn  |
 | -----------------|:-------:| --------:|--------:|
@@ -57,3 +57,5 @@ arc4: 761MBytes/s
 |              将tcp窗口大小改为8M后              |
 | 200ms 延迟       | 12Mb/s  | 12Mb/s   | 16Mb/s  |
 | 200ms±50ms 延迟 |  9Mb/s  |  2Mb/s   |  9Mb/s  |
+
+可见在有乱序包的情况下，打了补丁的内核vpn速度提升了1-2个数量级。
