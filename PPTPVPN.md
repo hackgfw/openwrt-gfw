@@ -4,9 +4,9 @@
 
 # 前期准备
  * 一台Openwrt路由器
- * 安装 pptp 客户端 (opkg install pptp)
+ * 安装 pptp 客户端 (opkg install ppp-mod-pptp) (10.03旧版请用 opkg install pptp)
  * 安装 iproute2 (opkg install ip)
- * 安装 ipset 及 iptables 的 ipset 及对应的内核模块 (opkg install ipset iptables-mod-ipset kmod-ipt-ipset)
+ * 安装 ipset 及 iptables 的 ipset 及对应的内核模块 (opkg install ipset iptables-mod-ipset kmod-ipt-ipset) (最新的trunk已经不需要iptables-mod-ipset了)
 
 
 # 原理
