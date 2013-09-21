@@ -6,6 +6,7 @@ openwrt-gfw
 * 通过VPN翻墙的同时又能使用本地线路访问国内网络: [PPTPVPN](PPTPVPN.md)
 * 使用双线VPN翻墙，即使其中一条线路断线也能正常翻墙，同时还能降低丢包率: [DualLinePPTPVPN](DualLinePPTPVPN.md)
 * 使用新版Openwrt提供的内核pptp提升性能，同时使其支持缓存数据包功能: [OptimizePPTPVPN](OptimizePPTPVPN.md)
+* 上述大部分内容已经做成了软件包，安装并根据需要修改下配置即可: [UsePackage](UsePackage.md)
 
 PS：近日联通封锁了he.net的nameserver服务器，导致所有托管在ns*.he.net的域名无法解析。换托管商固然可以解决问题，不过谁能保证新的托管商不会被封呢？或者自建nameserver也可以，不过工作量大还需要自己维护。其实通过域名注册商把自己的vps注册为nameserver，然后在vps上用iptables把53端口转发到ns1.he.net就可以突破封锁了。
 
