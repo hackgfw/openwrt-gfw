@@ -21,8 +21,6 @@
 /etc/config/gfw-vpn.whitezone 对应于文章中提到的 cn.zone  
 /etc/config/gfw-vpn.whiteip 对应于文章中提到的 ip.whitelist  
 
-
-
 # gfw-dualpptp
 该包对应 [DualLinePPTPVPN](DualLinePPTPVPN.md) 提到的内容  
 需要手动创建主/辅VPN链接并将主VPN连接加入防火墙wan区域，然后修改 /etc/config/gfw-dualpptp 中的主/辅VPN接口名称。可以使用gfw-vpn中的VPN链接作为主VPN，这样只需要创建辅VPN即可。  
