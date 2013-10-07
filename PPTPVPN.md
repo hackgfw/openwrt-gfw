@@ -7,6 +7,7 @@
  * 安装 pptp 客户端 (opkg install ppp-mod-pptp) (10.03旧版请用 opkg install pptp)
  * 安装 iproute2 (opkg install ip)
  * 安装 ipset (opkg install ipset)
+ * 安装 iptables 的 MARK 模块 (opkg install iptables-mod-ipopt)
 
 
 # 原理
