@@ -58,7 +58,7 @@ config zone
  * **下载中国的ip列表并存到 /etc/config/cn.zone**
 
 ```
-wget -O /etc/config/cn.zone http://www.ipdeny.com/ipblocks/data/countries/cn.zone
+wget -O /etc/config/cn.zone --no-check-certificate https://github.com/hackgfw/openwrt-gfw/raw/master/cn.zone
 ```
 
 注：在写该文章时，这个地址下到的中国ip列表不全，建议用 apnic 的ip地址分配信息生成 cn.zone，或者下载我预生成的 [cn.zone](cn.zone)
