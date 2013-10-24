@@ -55,6 +55,8 @@ config zone
         option mtu_fix          1
 ```
 
+注：新版的Openwrt将network选项改成了list，如果你看到的是 list network 'wan' 的话，则再加一行 list network 'wall' 即可
+
  * **下载中国的ip列表并存到 /etc/config/cn.zone**
 
 ```
