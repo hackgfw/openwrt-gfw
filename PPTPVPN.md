@@ -75,6 +75,13 @@ wget -O /etc/config/cn.zone http://www.ipdeny.com/ipblocks/data/countries/cn.zon
  * **创建 /etc/ppp/ip-up.d/ip-up-wall ，将该文件设置成可执行，并输入如下内容**
 
 ```bash
+PPP_IFACE="$1";
+PPP_TTY="$2";
+PPP_SPEED="$3";
+PPP_LOCAL="$4";
+PPP_REMOTE="$5";
+PPP_IPPARAM="$6";
+
 ip_up_wall() {
         ip route del default via $PPP_REMOTE
 
@@ -126,6 +133,13 @@ fi
  * **创建 /etc/ppp/ip-down.d/ip-down-wall ，将该文件设置成可执行，并输入如下内容**
 
 ```bash
+PPP_IFACE="$1";
+PPP_TTY="$2";
+PPP_SPEED="$3";
+PPP_LOCAL="$4";
+PPP_REMOTE="$5";
+PPP_IPPARAM="$6";
+
 ip_down_wall() {
         iptables -t mangle -D PREROUTING -p tcp -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
         iptables -t mangle -D OUTPUT -p tcp -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
