@@ -313,6 +313,13 @@ config zone
  * **在Openwrt上创建 /etc/ppp/ip-up.d/ip-up-client ，将该文件设置成可执行，并输入如下内容**
 
 ```bash
+PPP_IFACE="$1";
+PPP_TTY="$2";
+PPP_SPEED="$3";
+PPP_LOCAL="$4";
+PPP_REMOTE="$5";
+PPP_IPPARAM="$6";
+
 dupgre() {
         ip route del default via $PPP_REMOTE
 
@@ -339,6 +346,13 @@ fi
  * **在Openwrt上创建 /etc/ppp/ip-down.d/ip-down-client ，将该文件设置成可执行，并输入如下内容**
 
 ```bash
+PPP_IFACE="$1";
+PPP_TTY="$2";
+PPP_SPEED="$3";
+PPP_LOCAL="$4";
+PPP_REMOTE="$5";
+PPP_IPPARAM="$6";
+
 deldupgre() {
         iptables -t mangle -D PREROUTING -p tcp --dport 1119 -j MARK --set-mark 0xfffe
         iptables -t mangle -D OUTPUT -p tcp --dport 1119 -j MARK --set-mark 0xfffe
@@ -355,6 +369,13 @@ fi
  * **在Openwrt上创建 /etc/ppp/ip-up.d/ip-up-cdual ，将该文件设置成可执行，并输入如下内容**
 
 ```bash
+PPP_IFACE="$1";
+PPP_TTY="$2";
+PPP_SPEED="$3";
+PPP_LOCAL="$4";
+PPP_REMOTE="$5";
+PPP_IPPARAM="$6";
+
 cdual() {
         ip route del default via $PPP_REMOTE
 
@@ -405,6 +426,13 @@ fi
  * **在Openwrt上创建 /etc/ppp/ip-down.d/ip-down-cdual ，将该文件设置成可执行，并输入如下内容**
 
 ```bash
+PPP_IFACE="$1";
+PPP_TTY="$2";
+PPP_SPEED="$3";
+PPP_LOCAL="$4";
+PPP_REMOTE="$5";
+PPP_IPPARAM="$6";
+
 delcdual() {
 
         iptables -D INPUT ! -p 47 -i $PPP_IFACE -j DROP
