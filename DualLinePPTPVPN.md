@@ -268,21 +268,21 @@ fi
  * **在Openwrt上添加VPN连接，修改 /etc/config/network**
 
 ```
-config 'interface' 'bwall'
-        option 'proto' 'pptp'
-        option 'server' 'secondary.example.com'
-        option 'username' 'cdual'
-        option 'password' 'password'
-        option 'defaultroute' '0'
-        option 'auto' '1'
+config interface 'bwall'
+        option proto 'pptp'
+        option server 'secondary.example.com'
+        option username 'cdual'
+        option password 'password'
+        option defaultroute '0'
+        option auto '1'
 
-config 'interface' 'dwall'
-        option 'proto' 'pptp'
-        option 'server' 'main.example.com'
-        option 'username' 'client'
-        option 'password' 'password'
-        option 'defaultroute' '0'
-        option 'auto' '1'
+config interface 'dwall'
+        option proto 'pptp'
+        option server 'main.example.com'
+        option username 'client'
+        option password 'password'
+        option defaultroute '0'
+        option auto '1'
 ```
 main.example.com 即为主VPN服务器地址，secondary.example.com为辅VPN地址
 
