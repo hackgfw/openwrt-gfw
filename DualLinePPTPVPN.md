@@ -310,6 +310,8 @@ config zone
         option masq             1
         option mtu_fix          1
 ```
+注：新版的Openwrt将network选项改成了list，如果你看到的是 list network 'wan' 的话，则再加一行 list network 'dwall' 即可
+
  * **在Openwrt上创建 /etc/ppp/ip-up.d/ip-up-client ，将该文件设置成可执行，并输入如下内容**
 
 ```bash
