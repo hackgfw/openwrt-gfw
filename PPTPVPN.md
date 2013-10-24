@@ -19,12 +19,12 @@
 
 ```
 config 'interface' 'wall'
-        option 'proto' 'pptp'
-        option 'server' 'vpn.example.com'
-        option 'username' 'username'
-        option 'password' 'password'
-        option 'defaultroute' '0'
-        option 'auto' '1'
+        option proto 'pptp'
+        option server 'vpn.example.com'
+        option username 'username'
+        option password 'password'
+        option defaultroute '0'
+        option auto '1'
 ```
 
 替换上面的 server,username,password 为vpn服务器地址、用户名及密码，另外注意上面defaultroute设为0，因为之后会通过脚本添加路由，所以这里不开启默认路由
