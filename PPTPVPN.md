@@ -18,7 +18,7 @@
  * **在 /etc/config/network 中添加vpn连接**
 
 ```
-config 'interface' 'wall'
+config interface 'wall'
         option proto 'pptp'
         option server 'vpn.example.com'
         option username 'username'
