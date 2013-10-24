@@ -109,9 +109,9 @@ ip_up_wall() {
                 done
         fi
 
-        iptables -t mangle -A PREROUTING -p tcp -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
-        iptables -t mangle -A OUTPUT -p tcp -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
-        iptables -t mangle -A FORWARD -p tcp -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
+        iptables -t mangle -A PREROUTING -p tcp -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
+        iptables -t mangle -A OUTPUT -p tcp -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
+        iptables -t mangle -A FORWARD -p tcp -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
 
         CHKIPROUTE=$(grep wall /etc/iproute2/rt_tables)
         if [ -z "$CHKIPROUTE" ]; then
@@ -141,9 +141,9 @@ PPP_REMOTE="$5";
 PPP_IPPARAM="$6";
 
 ip_down_wall() {
-        iptables -t mangle -D PREROUTING -p tcp -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
-        iptables -t mangle -D OUTPUT -p tcp -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
-        iptables -t mangle -D FORWARD -p tcp -m set --match-set ! whiteip src -m set --match-set ! whiteip dst -m set --match-set ! china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
+        iptables -t mangle -D PREROUTING -p tcp -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
+        iptables -t mangle -D OUTPUT -p tcp -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
+        iptables -t mangle -D FORWARD -p tcp -m set ! --match-set whiteip src -m set ! --match-set whiteip dst -m set ! --match-set china dst -m multiport --dports 80,443,1935 -j MARK --set-mark 0xffff
 
         ip route del table wall default
         ip rule del priority 1
