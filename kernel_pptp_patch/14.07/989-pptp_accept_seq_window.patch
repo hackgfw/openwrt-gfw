@@ -1,0 +1,260 @@
+--- a/drivers/net/ppp/pptp.c
++++ b/drivers/net/ppp/pptp.c
+@@ -12,6 +12,10 @@
+ 
+ #include <linux/string.h>
+ #include <linux/module.h>
++#include <linux/jiffies.h>
++#include <linux/fs.h>
++#include <linux/seq_file.h>
++#include <linux/version.h>
+ #include <linux/kernel.h>
+ #include <linux/slab.h>
+ #include <linux/errno.h>
+@@ -55,11 +59,14 @@ static struct proto pptp_sk_proto __read
+ static const struct ppp_channel_ops pptp_chan_ops;
+ static const struct proto_ops pptp_ops;
+ 
++static struct proc_dir_entry *root_proc_entry;
++
+ #define PPP_LCP_ECHOREQ 0x09
+ #define PPP_LCP_ECHOREP 0x0A
+ #define SC_RCV_BITS	(SC_RCV_B7_1|SC_RCV_B7_0|SC_RCV_ODDP|SC_RCV_EVNP)
+ 
+-#define MISSING_WINDOW 20
++#define MISSING_WINDOW 2048	/* must be 2^N */
++#define WINDOWS_TIMEOUT	3	/* in 1/N seconds */
+ #define WRAPPED(curseq, lastseq)\
+ 	((((curseq) & 0xffffff00) == 0) &&\
+ 	(((lastseq) & 0xffffff00) == 0xffffff00))
+@@ -90,6 +97,35 @@ struct pptp_gre_header {
+ 	u32 ack;
+ } __packed;
+ 
++struct pptp_meta {
++	u32 seq;
++	u32 timestamp;
++};
++
++static inline struct pptp_meta *get_pptp_meta(struct sk_buff *skb)
++{
++	return (struct pptp_meta *)skb->cb;
++}
++
++static inline void proc_queue(struct pppox_sock *po)
++{
++	struct pptp_opt *opt = &po->proto.pptp;
++	struct pptp_meta *meta;
++	u32 nowtime=jiffies;
++	u32 i;
++	for (i=opt->seq_recv+1;i!=opt->seq_ahead+1;i++)
++	{
++		if (opt->skb_buff[i % MISSING_WINDOW] == NULL) continue;
++		meta=get_pptp_meta(opt->skb_buff[i % MISSING_WINDOW]);
++		/* check timeout */
++		if (nowtime - meta->timestamp < HZ / WINDOWS_TIMEOUT && i != opt->seq_recv+1) break;
++		opt->rx_lost+=i-opt->seq_recv-1;
++		opt->seq_recv=i;
++		ppp_input(&po->chan, opt->skb_buff[i % MISSING_WINDOW]);
++		opt->skb_buff[i % MISSING_WINDOW] = NULL;
++	}
++}
++
+ static struct pppox_sock *lookup_chan(u16 call_id, __be32 s_addr)
+ {
+ 	struct pppox_sock *sock;
+@@ -167,6 +203,31 @@ static void del_chan(struct pppox_sock *
+ 	synchronize_rcu();
+ }
+ 
++static int pptp_proc_show(struct seq_file *m, void *v)
++{
++	struct pptp_opt *opt = (struct pptp_opt *)m->private;
++	seq_printf(m, "Accepted: %u\nUnder Window: %u\nBuffered: %u\nDuplicated: %u\nLost: %u\n",
++		opt->rx_accepted,
++		opt->rx_underwin,
++		opt->rx_buffered,
++		opt->rx_dup,
++		opt->rx_lost);
++	return 0;
++}
++
++static int pptp_proc_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, pptp_proc_show, PDE_DATA(inode));
++}
++
++static const struct file_operations proc_file_fops = {
++  .owner	= THIS_MODULE,
++  .open		= pptp_proc_open,
++  .read		= seq_read,
++  .llseek	= seq_lseek,
++  .release	= single_release,
++};
++
+ static int pptp_xmit(struct ppp_channel *chan, struct sk_buff *skb)
+ {
+ 	struct sock *sk = (struct sock *) chan->private;
+@@ -296,7 +357,9 @@ static int pptp_rcv_core(struct sock *sk
+ {
+ 	struct pppox_sock *po = pppox_sk(sk);
+ 	struct pptp_opt *opt = &po->proto.pptp;
+-	int headersize, payload_len, seq;
++	struct pptp_meta *meta=get_pptp_meta(skb);
++	int headersize, payload_len;
++	u32 seq, seqdiff;
+ 	__u8 *payload;
+ 	struct pptp_gre_header *header;
+ 
+@@ -342,15 +405,37 @@ static int pptp_rcv_core(struct sock *sk
+ 		goto drop;
+ 
+ 	payload = skb->data + headersize;
+-	/* check for expected sequence number */
+-	if (seq < opt->seq_recv + 1 || WRAPPED(opt->seq_recv, seq)) {
+-		if ((payload[0] == PPP_ALLSTATIONS) && (payload[1] == PPP_UI) &&
+-				(PPP_PROTOCOL(payload) == PPP_LCP) &&
+-				((payload[4] == PPP_LCP_ECHOREQ) || (payload[4] == PPP_LCP_ECHOREP)))
++	seqdiff=opt->seq_ahead - seq;
++	/* check if sequence number too old */
++	if (seqdiff >= opt->seq_ahead - opt->seq_recv && seqdiff < 0x80000000) {
++		opt->rx_underwin++;
++	}
++	/* check if sequence number in window */
++	else if (seqdiff < MISSING_WINDOW) {
++		if (opt->skb_buff[seq%MISSING_WINDOW] == NULL) {
+ 			goto allow_packet;
++		}
++		else {
++			opt->rx_dup++;
++		}
++ 	/* update ahead */
+ 	} else {
+-		opt->seq_recv = seq;
++		for (;opt->seq_ahead != seq;) {
++			opt->seq_ahead++;
++			if (opt->seq_ahead - opt->seq_recv == MISSING_WINDOW + 1) {
++				opt->seq_recv++;
++				/* not enough buff, call back anyway */
++				if (opt->skb_buff[opt->seq_recv%MISSING_WINDOW]) ppp_input(&po->chan, opt->skb_buff[opt->seq_recv%MISSING_WINDOW]);
++				else opt->rx_lost++;
++				opt->skb_buff[opt->seq_recv%MISSING_WINDOW] = NULL;
++			}
++		}
+ allow_packet:
++		if (!opt->statistics && ppp_dev_name(&po->chan)) opt->statistics = proc_create_data(ppp_dev_name(&po->chan),0444,root_proc_entry,&proc_file_fops,opt);
++		opt->rx_accepted++;
++		if (opt->seq_recv + 1 != seq) opt->rx_buffered++;
++		meta->seq=seq;
++		meta->timestamp=jiffies;
+ 		skb_pull(skb, headersize);
+ 
+ 		if (payload[0] == PPP_ALLSTATIONS && payload[1] == PPP_UI) {
+@@ -367,7 +452,8 @@ allow_packet:
+ 
+ 		skb->ip_summed = CHECKSUM_NONE;
+ 		skb_set_network_header(skb, skb->head-skb->data);
+-		ppp_input(&po->chan, skb);
++		opt->skb_buff[seq%MISSING_WINDOW] = skb;
++		proc_queue(po);
+ 
+ 		return NET_RX_SUCCESS;
+ 	}
+@@ -552,6 +638,8 @@ static int pptp_release(struct socket *s
+ 
+ static void pptp_sock_destruct(struct sock *sk)
+ {
++	if (pppox_sk(sk)->proto.pptp.skb_buff) kfree(pppox_sk(sk)->proto.pptp.skb_buff);
++	if (pppox_sk(sk)->proto.pptp.statistics) proc_remove(pppox_sk(sk)->proto.pptp.statistics);
+ 	if (!(sk->sk_state & PPPOX_DEAD)) {
+ 		del_chan(pppox_sk(sk));
+ 		pppox_unbind_sock(sk);
+@@ -585,8 +673,18 @@ static int pptp_create(struct net *net,
+ 	po = pppox_sk(sk);
+ 	opt = &po->proto.pptp;
+ 
++	opt->skb_buff=(struct sk_buff **)kmalloc(sizeof(struct sk_buff *)*MISSING_WINDOW,GFP_KERNEL);
++	if (opt->skb_buff == NULL) goto out;
++	memset(opt->skb_buff,0,sizeof(struct sk_buff *)*MISSING_WINDOW);
+ 	opt->seq_sent = 0; opt->seq_recv = 0xffffffff;
+ 	opt->ack_recv = 0; opt->ack_sent = 0xffffffff;
++	opt->seq_ahead = 0xffffffff;
++	opt->statistics = NULL;
++	opt->rx_accepted = 0;
++	opt->rx_underwin = 0;
++	opt->rx_buffered = 0;
++	opt->rx_dup = 0;
++	opt->rx_lost = 0;
+ 
+ 	error = 0;
+ out:
+@@ -669,9 +767,17 @@ static int __init pptp_init_module(void)
+ 	int err = 0;
+ 	pr_info("PPTP driver version " PPTP_DRIVER_VERSION "\n");
+ 
++	root_proc_entry = proc_mkdir("pptp", NULL);
++	if (!root_proc_entry) {
++		pr_err("PPTP: cann't creating /proc/pptp\n");
++		return -EEXIST;
++	}
++
+ 	callid_sock = vzalloc((MAX_CALLID + 1) * sizeof(void *));
+-	if (!callid_sock)
+-		return -ENOMEM;
++	if (!callid_sock) {
++		err = -ENOMEM;
++		goto out_proc_existed;
++	}
+ 
+ 	err = gre_add_protocol(&gre_pptp_protocol, GREPROTO_PPTP);
+ 	if (err) {
+@@ -699,6 +805,11 @@ out_gre_del_protocol:
+ 	gre_del_protocol(&gre_pptp_protocol, GREPROTO_PPTP);
+ out_mem_free:
+ 	vfree(callid_sock);
++out_proc_existed:
++	if (root_proc_entry) {
++		proc_remove(root_proc_entry);
++		root_proc_entry = NULL;
++	}
+ 
+ 	return err;
+ }
+@@ -709,6 +820,10 @@ static void __exit pptp_exit_module(void
+ 	proto_unregister(&pptp_sk_proto);
+ 	gre_del_protocol(&gre_pptp_protocol, GREPROTO_PPTP);
+ 	vfree(callid_sock);
++	if (root_proc_entry) {
++		proc_remove(root_proc_entry);
++		root_proc_entry = NULL;
++	}
+ }
+ 
+ module_init(pptp_init_module);
+--- a/include/linux/if_pppox.h
++++ b/include/linux/if_pppox.h
+@@ -20,6 +20,7 @@
+ #include <linux/ppp_channel.h>
+ #include <linux/skbuff.h>
+ #include <uapi/linux/if_pppox.h>
++#include <linux/proc_fs.h>
+ 
+ static inline struct pppoe_hdr *pppoe_hdr(const struct sk_buff *skb)
+ {
+@@ -40,6 +41,16 @@ struct pptp_opt {
+ 	u32 ack_sent, ack_recv;
+ 	u32 seq_sent, seq_recv;
+ 	int ppp_flags;
++	struct sk_buff **skb_buff;
++	u32 seq_ahead;
++	struct proc_dir_entry *statistics;
++	u32 rx_accepted;	  /* data packet was passed to pptp */
++	u32 rx_underwin;	  /* data packet was under window (arrived too late
++				     or duplicate packet) */
++	u32 rx_buffered;	  /* data packet arrived earlier than expected,
++				     packet(s) before it were lost or reordered */
++	u32 rx_dup;		  /* duplicate packet while in buffer */
++	u32 rx_lost;		  /* packet did not arrive before timeout or buffer is full */
+ };
+ #include <net/sock.h>
+ 
