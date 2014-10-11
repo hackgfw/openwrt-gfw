@@ -2,15 +2,6 @@
 由于GFW的域名黑名单是不断变化的，如果所有DNS查询都走VPN会丧失CDN加速功能，经常出现本地电信线路，但是却访问网站的联通线路，而且当VPN线路不稳定的时候，会影响所有网站的访问。如果使用域名白名单或黑名单，对于经常访问外国网站的用户，体验很不好，需要用户自己维护域名列表。
 该文章介绍如何通过判断并丢弃包含特征IP的DNS包来防止DNS污染，但是又不会失去本地DNS的CDN加速功能，而且还不需要VPN。
 
-
-# 前期准备
-  * 一台Openwrt路由器
-  * 使用dnsmasq作为Openwrt的dns服务器
-  * 安装 dig (opkg install bind-dig bind-libs)
-  * 安装 iptables 的 string 模块及对应的内核模块 (opkg install iptables-mod-filter kmod-ipt-filter)
-  * 安装 iptables 的 u32 模块及对应的内核模块 (opkg install iptables-mod-u32 kmod-ipt-u32)
-
-
 # 原理
 分析：
  * GFW污染掉的域名返回的IP是有限的，即使用不提供的DNS服务的国外IP地址作为DNS服务器查询被污染的域名，GFW也会返回解析出的错误IP地址。
@@ -33,122 +24,19 @@
  * 一开始为了获得GFW返回的错误IP列表，多次查询被污染的域名，耗时过长
 
 # 解决方法
- * **创建 /etc/config/resolv.conf ，将你的本地dns服务器和国外dns服务器都添加进去，下面是例子（注意需要将其中的DNS服务器替换成你的ISP提供的）**
+ * **使用预编译的 [gfw-dns](gfw/gfw-dns_0.1.2_all.ipk) 或根据 [UsePackage](UsePackage.md) 自己编译安装**
+ * **修改 /etc/config/dhcp 将ISP的DNS服务器返回不存在域名的IP地址加入黑名单**
 
 ```
-nameserver 202.96.199.133
-nameserver 202.97.16.195
-nameserver 8.8.8.8
-nameserver 8.8.4.4
-```
-
- * **修改 /etc/config/dhcp ，让dnsmasq使用 /etc/config/resolv.conf 中的服务器,并将ISP的DNS返回不存在域名的IP地址加入黑名单**
-
-```
-option resolvfile       '/etc/config/resolv.conf'
 list bogusnxdomain     '63.251.179.17'
 ```
 
  你需要将上面的 63.251.179.17 替换掉。比如你向ISP的DNS查询 non.exist.domain，按规范应该返回NXDOMAIN，表示该域名不存在，但是运营商通常会返回一个他自己的地址，然后将你导向到其广告页。你需要将运营商返回的那个IP添加到bogusnxdomain中。
- * **修改 /etc/dnsmasq.conf ，使得dnsmasq同时查询所有dns服务器，添加一行**
 
-```
-all-servers
-```
-
- * **创建 /etc/protectdns.sh ，将该文件设置成可执行，并输入如下内容**
-
-```bash
-#!/bin/sh
-
-POSIONEDDOMAIN="www.twitter.com twitter.com www.facebook.com facebook.com www.youtube.com youtube.com encrypted.google.com plus.google.com www.appspot.com appspot.com www.openvpn.net openvpn.net forums.openvpn.net svn.openvpn.net shell.cjb.net"
-LOOPTIMES=1
-RULEFILENAME=/var/g.firewall.user
-
-# wait tail has internet connection
-while ! ping -W 1 -c 1 8.8.8.8 >&/dev/null; do sleep 30; done
-
-badip=""
-
-querydomain=""
-matchregex="^${POSIONEDDOMAIN//\ /|^}"
-for i in $(seq $LOOPTIMES) ; do
-        querydomain="$querydomain $POSIONEDDOMAIN"
-done
-
-for DOMAIN in $POSIONEDDOMAIN ; do
-        for IP in $(dig +time=1 +tries=1 +retry=0 @$DOMAIN $querydomain | grep -E "$matchregex" | grep -o -E "([0-9]+\.){3}[0-9]+") ; do
-                if [ -z "$(echo $badip | grep $IP)" ] ; then
-                        badip="$badip   $IP"
-                fi
-        done
-done
-
-for IP in $badip ; do
-        hexip=$(printf '%02X ' ${IP//./ }; echo)
-        echo "iptables -I INPUT -p udp --sport 53 -m string --algo bm --hex-string \"|$hexip|\" --from 60 --to 180  -j DROP" >> $RULEFILENAME.tmp 
-        echo "iptables -I FORWARD -p udp --sport 53 -m string --algo bm --hex-string \"|$hexip|\" --from 60 --to 180 -j DROP" >> $RULEFILENAME.tmp
-done
-
-echo "iptables -I INPUT -p udp --sport 53 -m u32 --u32 \"4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0\" -j DROP" >> $RULEFILENAME.tmp
-echo "iptables -I FORWARD -p udp --sport 53 -m u32 --u32 \"4 & 0x1FFF = 0 && 0 >> 22 & 0x3C @ 8 & 0x8000 = 0x8000 && 0 >> 22 & 0x3C @ 14 = 0\" -j DROP" >> $RULEFILENAME.tmp
-
-if [[ -s $RULEFILENAME ]] ; then
-        grep -Fvf $RULEFILENAME $RULEFILENAME.tmp > $RULEFILENAME.action
-        cat $RULEFILENAME.action >> $RULEFILENAME
-else
-        cp $RULEFILENAME.tmp $RULEFILENAME
-        cp $RULEFILENAME.tmp $RULEFILENAME.action
-fi
-
-. $RULEFILENAME.action
-rm $RULEFILENAME.tmp
-rm $RULEFILENAME.action
-```
-
- 由于上面脚本在查询GFW返回的错误IP时，使用了被污染的域名本身作为DNS服务器，因此如果以后GFW将该域名解禁，查询将不返回任何结果（但是会超时，使得耗时更长），并不会影响badip列表，只需要在开始把足够多的被污染域名填入POSIONEDDOMAIN即可。放入POSIONEDDOMAIN的域名应保证该域名以后不会提供DNS解析服务，同时该域名也不太容易被GFW解封
- 另外iptables的操作都存到了/var/g.firewall.user，以方便在防火墙重启的时候重新添加规则
- * **修改 /etc/config/firewall 加入**
-
-```
-config include
-        option path /var/g.firewall.user
-```
-
- 以便在防火墙重启后重新添加规则
- * **创建启动脚本 /etc/init.d/protectdns 以便随系统自动启动**
-
-```bash
-#!/bin/sh /etc/rc.common
-
-START=99
-RULEFILENAME=/var/g.firewall.user
-
-start() {
-        /etc/protectdns.sh &
-        }
-
-stop() {
-        local pid
-        pid=`ps w | grep protectdns.sh | grep -v grep | awk '{print $1}'`
-        for i in $pid;do kill -9 $i;done
-        [[ -s $RULEFILENAME ]] && {
-                sed -ie 's/iptables \+-I \+/iptables -D /' $RULEFILENAME
-                . $RULEFILENAME
-                rm $RULEFILENAME
-                }
-        }
-```
-
- 执行 /etc/init.d/protectdns enable 以将该脚本设置成自动启动，执行 /etc/init.d/protectdns stop 会移除所有已添加的iptables规则并将 /var/g.firewall.user 删除，执行 /etc/init.d/protectdns start 会查找新的被污染IP并添加iptables规则
- * **为了定时更新，可以在 /etc/crontabs/root 加入**
-
-```
-0 6 * * * /etc/init.d/protectdns start
-```
-
- 上面的例子是在每天凌晨6点重新查找新的被污染IP，你可以根据需要修改更新频率和时间
+ * 可以手工修改 /etc/config/gfw-dns 添加/删除域名，不过一般情况下默认的配置应该就能很好的工作了。由于在查询GFW返回的错误IP时，使用了被污染域名本身作为DNS服务器，因此如果以后GFW将该域名解禁，查询将不返回任何结果（但是会超时，使得耗时更长），并不会影响结果。放入配置中的域名应保证该域名以后不会提供DNS解析服务，同时该域名也不太容易被GFW解封
+ * 如果你没有使用VPN或VPN没有推送DNS服务器，则需要将国内和国外的DNS服务器都加入到wan口的配置中
+ * 执行 /etc/init.d/gfw-dns start 会查找新的被污染IP并将其过滤掉，执行 /etc/init.d/gfw-dns stop 将停止DNS防污染保护
 
 # 后记
- * 如果你使用VPN，而且VPN服务器推送DNS的话，可以不修改/etc/config/resolv.conf 和 /etc/config/dhcp，dnsmasq会自动使用本地DNS和VPN推送的DNS
  * 从目前的趋势看，估计GFW以后很有可能会在骨干路由上直接丢弃国外DNS返回的正确数据包，导致无法收到正确的DNS结果。如果这项功能正式部署，可以通过VPN发送DNS请求，以上提到的防止DNS污染的同时又不会失去本地DNS的CDN加速功能依然能够实现，只不过需要一条VPN连接来联系国外DNS服务器。
+ * 另一种DNS防污染同时又不失CDN加速的方法是自建一个DNS递归查询服务器，通过VPN线路查询 nameserver 位于国外的域名，通过本地线路查询 nameserver 位于国内的域名，不过这个办法依赖VPN而且实测下来DNS解析延迟太高。测试了下查询 Alexa Top 500 网站使用该文的方法平均响应时间是30ms，而用自建的DNS递归服务器有400ms

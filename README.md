@@ -1,21 +1,20 @@
-openwrt-gfw
+Openwrt的翻墙解决方案
 ===========
 
-# Openwrt的翻墙解决方案
-* 不用VPN就能避免DNS污染，同时还能使用本地CDN: [AntiDNSPoisoning](AntiDNSPoisoning.md)
-* 通过VPN翻墙的同时又能使用本地线路访问国内网络: [PPTPVPN](PPTPVPN.md)
-* 使用双线VPN翻墙，即使其中一条线路断线也能正常翻墙，同时还能降低丢包率: [DualLinePPTPVPN](DualLinePPTPVPN.md)
-* 使用新版Openwrt提供的内核pptp提升性能，同时使其支持缓存数据包功能: [OptimizePPTPVPN](OptimizePPTPVPN.md)
-* 上述大部分内容已经做成了软件包，安装并根据需要修改下配置即可: [UsePackage](UsePackage.md)
+# 使用方法
+从 [gfw](gfw) 下载预编译好的ipk包（该包适用于所有平台）上传到路由器上并执行 opkg install 安装，如果有兴趣重新编译的话可以参见: [UsePackage](UsePackage.md)  
 
-PS：近日联通封锁了he.net的nameserver服务器，导致所有托管在ns*.he.net的域名无法解析。换托管商固然可以解决问题，不过谁能保证新的托管商不会被封呢？或者自建nameserver也可以，不过工作量大还需要自己维护。其实通过域名注册商把自己的vps注册为nameserver，然后在vps上用iptables把53端口转发到ns1.he.net就可以突破封锁了。
+* gfw-dns: 不用VPN就能避免DNS污染，同时还能使用本地CDN: [AntiDNSPoisoning](AntiDNSPoisoning.md)
+* gfw-vpn: 通过VPN翻墙的同时又能使用本地线路访问国内网络: [PPTPVPN](PPTPVPN.md)
+* gfw-dualpptp: 使用双线VPN翻墙，即使其中一条线路断线也能正常翻墙，同时还能降低丢包率: [DualLinePPTPVPN](DualLinePPTPVPN.md)
+* 优化内核pptp性能，同时使其支持缓存数据包功能: [OptimizePPTPVPN](OptimizePPTPVPN.md)
 
 
 # 关于为何写该系列
 我理想中的翻墙方案应该是对用户完全透明，让上网体验就像墙根本不存在一样，只需设置一次，其后不需要任何维护。其次是不能降低安全性，不能因为翻墙而引入新的安全隐患。最后还需要有全平台多设备的支持。但是看目前各翻墙方法都或多或少有些问题，比如：
 * Host翻墙：没法上被封ip的网站，需要手动更新，或者等发布者更新，而且更新都是事后的。有安全隐患，发布者可以恶意（或者因为账号被黑）放钓鱼ip在其中。在手机上设置并不容易。
 * SSH代理：有tcp over tcp的性能问题，如果软件不支持代理就比较麻烦，需要经常更新代理规则。
-* 各种其他代理：自由门、无界之类不开源的都有安全隐患，开源的像goagent会引入中间人攻击隐患，例如年初对GitHub的中间人攻击，如果不翻墙的话就会看到浏览器警告，而用goagent使用国内的gae就不会有任何警告，另外同样需要经常更新代理规则。
+* 各种其他代理：自由门、无界之类不开源的都有安全隐患，开源的像goagent会引入中间人攻击隐患，例如2013年初对GitHub的中间人攻击，如果不翻墙的话就会看到浏览器警告，而用goagent使用国内的gae就不会有任何警告，另外同样需要经常更新代理规则。
 * 各种VPN：虽然可以通过修改路由表区分国内国外流量，但是没法区分p2p和上网流量，如果挂bt或者emule会有大量流量走VPN。另外虽然可以通过autoddvpn提供DNS CDN功能，但是需要维护域名列表。
 
 而本系列解决了:

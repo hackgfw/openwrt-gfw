@@ -3,11 +3,9 @@
 
 
 # 前期准备
- * 两台国外服务器，均需要有root权限以修改服务器设置。OpenVZ服务器即可，不过需要OpenVZ加载对应的 内核模块。另外还需要公网ip或位于Stateless NAT后，即只映射ip而不改变端口（例如ec2的NAT）
- * 一台Openwrt路由器且必须能取得公网IP (位于Stateless NAT后或许也可以，不过未测试过)
- * 安装 pptp 客户端 (opkg install pptp) (这里指的是 http://pptpclient.sourceforge.net/ ，新版Openwrt使用的是内核pptp，需要给内核打补丁，详见[OptimizePPTPVPN](OptimizePPTPVPN.md))
- * 安装 iptables 的 u32 模块及对应的内核模块 (opkg install iptables-mod-u32 kmod-ipt-u32)
- * 安装 iptables 的 tee 模块及对应的内核模块 (opkg install iptables-mod-tee kmod-ipt-tee) (该模块是2.6.35版引入内核的，如果使用旧版内核的话也许可以用 http://xtables-addons.sourceforge.net/ 不过本人并未测试过)
+ * 两台国外服务器，均需要有root权限以修改服务器设置。OpenVZ服务器即可，不过需要OpenVZ加载对应的内核模块。另外还需要公网ip或位于Stateless NAT后，即只映射ip而不改变端口（例如ec2的NAT）
+ * 一台运行 Openwrt 12.09 或 14.07 的路由器且必须能取得公网IP (位于Stateless NAT后或许也可以，不过未测试过)
+ * 给Openwrt使用的内核pptp打补丁，详见[OptimizePPTPVPN](OptimizePPTPVPN.md)
 
 
 # 原理
@@ -28,19 +26,11 @@
 举例来说吧（以下均假设两条线路的丢包率不相关，即丢包并非因为本地带宽不足或其他等因素）：
   1. 客户端到主VPN服务器的丢包率是10%，延迟是150ms，客户端到辅VPN服务器的丢包率是0%，延迟是250ms，那么最终客户端到互联网将没有丢包，延迟会在150ms到250ms之间波动。如果客户端到主VPN服务器的丢包率上升到100%即断线，那么延迟将稳定在250ms
   2. 客户端到主VPN服务器的丢包率是10%，延迟是150ms，客户端到辅VPN服务器的丢包率是10%，延迟是250ms,那么最终客户端到互联网的丢包率=1-10%*10%=1%，延迟会在150ms到250ms之间波动。
-  3. 客户端到主VPN服务器的丢包率是10%，延迟是150ms，客户端到辅VPN服务器的丢包率是0%，延迟是550ms，最终客户端到互联网的丢包率将为10%，延迟将保持在150ms，除非客户端到主VPN服务器完全断线。之所以如此是因为pptp默认最多缓存300ms内收到的数据包信息。这个300ms是定义在pqueue.h中的
-
-```c
-/* wait this many seconds for missing packets before forgetting about them */
-#define DEFAULT_PACKET_TIMEOUT 0.3
-```
-可以在调用pptp时指定 --timeout 参数以调整缓存时间
+  3. 客户端到主VPN服务器的丢包率是10%，延迟是150ms，客户端到辅VPN服务器的丢包率是0%，延迟是550ms，最终客户端到互联网的丢包率将为10%，延迟将保持在150ms，除非客户端到主VPN服务器完全断线。之所以如此是因为pptp默认最多缓存300ms内收到的数据包信息。
 
 
 # 解决方法
-Update 1：简化了辅VPN上的脚本,允许多个主VPN共用同一个辅VPN
-
-注：双线VPN是去年为玩D3而建的，因此下面脚本均以D3所用端口为例，如需改成上网请参照 [PPTPVPN](PPTPVPN.md)。
+ * **使用预编译的 [gfw-dualpptp](gfw/gfw-dualpptp_0.2_all.ipk) 或根据 [UsePackage](UsePackage.md) 自己编译安装到Openwrt路由器上**
  * **修改所有主机（主/辅VPN服务器和Openwrt）上的 /etc/sysctl.conf 加入**
 
 ```
@@ -214,6 +204,8 @@ cdual           *       password                   10.66.4.65
 上面的password是密码,可以替换成其他值,不过需要保持和主VPN及客户端的密码一致
  * **在辅VPN服务器上创建 /etc/ppp/ip-up.d/ip-up-dual ，将该文件设置成可执行，并输入如下内容**
 
+注：该脚本允许多个主VPN服务器共用同一个辅VPN服务器
+
 ```bash
 #!/bin/bash
 
@@ -265,203 +257,11 @@ if [[ "$PPP_REMOTE" != "${PPP_REMOTE/10.66.4.6/}" ]]; then
         deldual
 fi
 ```
- * **在Openwrt上添加VPN连接，修改 /etc/config/network**
-
-```
-config interface 'bwall'
-        option proto 'pptp'
-        option server 'secondary.example.com'
-        option username 'cdual'
-        option password 'password'
-        option defaultroute '0'
-        option auto '1'
-
-config interface 'dwall'
-        option proto 'pptp'
-        option server 'main.example.com'
-        option username 'client'
-        option password 'password'
-        option defaultroute '0'
-        option auto '1'
-```
-main.example.com 即为主VPN服务器地址，secondary.example.com为辅VPN地址
-
- * **修改Openwrt上的防火墙，在 /etc/config/firewall 的wan区域中加入主vpn接口，找到类似**
-
-```
-config zone
-        option name             wan
-        option network          'wan wall'
-        option input            REJECT
-        option output           ACCEPT
-        option forward          REJECT
-        option masq             1
-        option mtu_fix          1
-```
-在 network 选项中加入 dwall
-
-```
-config zone
-        option name             wan
-        option network          'wan wall dwall'
-        option input            REJECT
-        option output           ACCEPT
-        option forward          REJECT
-        option masq             1
-        option mtu_fix          1
-```
-注：新版的Openwrt将network选项改成了list，如果你看到的是 list network 'wan' 的话，则再加一行 list network 'dwall' 即可
-
- * **在Openwrt上创建 /etc/ppp/ip-up.d/ip-up-client ，将该文件设置成可执行，并输入如下内容**
-
-```bash
-PPP_IFACE="$1";
-PPP_TTY="$2";
-PPP_SPEED="$3";
-PPP_LOCAL="$4";
-PPP_REMOTE="$5";
-PPP_IPPARAM="$6";
-
-dupgre() {
-        ip route del default via $PPP_REMOTE
-
-        ifconfig $PPP_IFACE mtu 1380
-
-        iptables -t mangle -A PREROUTING -p tcp --dport 1119 -j MARK --set-mark 0xfffe
-        iptables -t mangle -A OUTPUT -p tcp --dport 1119 -j MARK --set-mark 0xfffe
-        iptables -t mangle -A FORWARD -p tcp --dport 1119 -j MARK --set-mark 0xfffe
-
-        CHKIPROUTE=$(grep dupgre /etc/iproute2/rt_tables)
-        if [ -z "$CHKIPROUTE" ]; then
-                echo "37 dupgre" >> /etc/iproute2/rt_tables
-        fi
-
-        ip route add table dupgre default via $PPP_LOCAL
-        ip rule add fwmark 0xfffe table dupgre priority 20
-}
-
-if [ "$PPP_IFACE" == "pptp-dwall" ]; then
-        dupgre
-fi
-```
-上面的1119即为D3所用端口
- * **在Openwrt上创建 /etc/ppp/ip-down.d/ip-down-client ，将该文件设置成可执行，并输入如下内容**
-
-```bash
-PPP_IFACE="$1";
-PPP_TTY="$2";
-PPP_SPEED="$3";
-PPP_LOCAL="$4";
-PPP_REMOTE="$5";
-PPP_IPPARAM="$6";
-
-deldupgre() {
-        iptables -t mangle -D PREROUTING -p tcp --dport 1119 -j MARK --set-mark 0xfffe
-        iptables -t mangle -D OUTPUT -p tcp --dport 1119 -j MARK --set-mark 0xfffe
-        iptables -t mangle -D FORWARD -p tcp --dport 1119 -j MARK --set-mark 0xfffe
-
-        ip route del table dupgre default
-        ip rule del priority 20
-}
-
-if [ "$PPP_IFACE" == "pptp-dwall" ]; then
-        deldupgre
-fi
-```
- * **在Openwrt上创建 /etc/ppp/ip-up.d/ip-up-cdual ，将该文件设置成可执行，并输入如下内容**
-
-```bash
-PPP_IFACE="$1";
-PPP_TTY="$2";
-PPP_SPEED="$3";
-PPP_LOCAL="$4";
-PPP_REMOTE="$5";
-PPP_IPPARAM="$6";
-
-cdual() {
-        ip route del default via $PPP_REMOTE
-
-        ifconfig $PPP_IFACE mtu 1448
-
-        iptables -I INPUT ! -p 47 -i $PPP_IFACE -j DROP
-        iptables -I INPUT -p tcp --sport 1723 -i $PPP_IFACE -j ACCEPT
-        iptables -I INPUT -p tcp --dport 1723 -i $PPP_IFACE -j ACCEPT
-        iptables -I FORWARD -p 47 -o $PPP_IFACE -j ACCEPT
-        iptables -I FORWARD -p tcp --sport 1723 -o $PPP_IFACE -j ACCEPT
-        iptables -I FORWARD -p tcp --dport 1723 -o $PPP_IFACE -j ACCEPT
-
-        iptables -t mangle -N dupgre
-        iptables -t mangle -I OUTPUT -p 47 -d main.example.com -m u32 --u32 "0>>22&0x3C@4>>16=0x1:0xFFFF" -j dupgre
-
-        iptables -t mangle -N duptcp
-        iptables -t mangle -I OUTPUT -p tcp --sport 1723 -d main.example.com -j duptcp
-        iptables -t mangle -I OUTPUT -p tcp --dport 1723 -d main.example.com -j duptcp
-
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8>>24=0xFD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12>>24=0xFD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12>>24=0xFD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16>>24=0xFD" -j TEE --gateway $PPP_REMOTE
-
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8=0xFF0300FD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12=0xFF0300FD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12=0xFF0300FD" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16=0xFF0300FD" -j TEE --gateway $PPP_REMOTE
-
-        iptables -t mangle -I duptcp -m u32 --u32 "0>>22&0x3C@12>>26&0x3C@2>>16=0x1 && 0>>22&0x3C@12>>26&0x3C@8>>16=0x5:0x6" -j TEE --gateway $PPP_REMOTE
-
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8>>8=0xC02109:0xC0210A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12>>8=0xC02109:0xC0210A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12>>8=0xC02109:0xC0210A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16>>8=0xC02109:0xC0210A" -j TEE --gateway $PPP_REMOTE
-
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2001880b && 0>>22&0x3C@8=0xFF03C021 && 0>>22&0x3C@12>>24=0x09:0x0A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3001880b && 0>>22&0x3C@12=0xFF03C021 && 0>>22&0x3C@16>>24=0x09:0x0A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x2081880b && 0>>22&0x3C@12=0xFF03C021 && 0>>22&0x3C@16>>24=0x09:0x0A" -j TEE --gateway $PPP_REMOTE
-        iptables -t mangle -I dupgre -m u32 --u32 "0>>22&0x3C@0=0x3081880b && 0>>22&0x3C@16=0xFF03C021 && 0>>22&0x3C@20>>24=0x09:0x0A" -j TEE --gateway $PPP_REMOTE
-}
-
-if [ "$PPP_IFACE" == "pptp-bwall" ]; then
-        cdual
-fi
-```
-把上面的 main.example.com 替换成主VPN服务器的IP地址
- * **在Openwrt上创建 /etc/ppp/ip-down.d/ip-down-cdual ，将该文件设置成可执行，并输入如下内容**
-
-```bash
-PPP_IFACE="$1";
-PPP_TTY="$2";
-PPP_SPEED="$3";
-PPP_LOCAL="$4";
-PPP_REMOTE="$5";
-PPP_IPPARAM="$6";
-
-delcdual() {
-
-        iptables -D INPUT ! -p 47 -i $PPP_IFACE -j DROP
-        iptables -D INPUT -p tcp --sport 1723 -i $PPP_IFACE -j ACCEPT
-        iptables -D INPUT -p tcp --dport 1723 -i $PPP_IFACE -j ACCEPT
-        iptables -D FORWARD -p 47 -o $PPP_IFACE -j ACCEPT
-        iptables -D FORWARD -p tcp --sport 1723 -o $PPP_IFACE -j ACCEPT
-        iptables -D FORWARD -p tcp --dport 1723 -o $PPP_IFACE -j ACCEPT
-
-        iptables -t mangle -D OUTPUT -p 47 -d main.example.com -m u32 --u32 "0>>22&0x3C@4>>16=0x1:0xFFFF" -j dupgre
-        iptables -t mangle -F dupgre
-        iptables -t mangle -X dupgre
-
-        iptables -t mangle -D OUTPUT -p tcp --sport 1723 -d main.example.com -j duptcp
-        iptables -t mangle -D OUTPUT -p tcp --dport 1723 -d main.example.com -j duptcp
-        iptables -t mangle -F duptcp
-        iptables -t mangle -X duptcp
-}
-
-if [ "$PPP_IFACE" == "pptp-bwall" ]; then
-        delcdual
-fi
-```
-把上面的 main.example.com 替换成主VPN服务器的IP地址
+ * **参照 [PPTPVPN](PPTPVPN.md) 在Openwrt上创建主/辅VPN链接（可以使用gfw-vpn中的VPN链接作为主VPN，这样只需要创建辅VPN即可），主VPN使用client帐号，辅VPN使用cdual帐号，并将主VPN链接加入到防火墙的wan区域（辅VPN链接不要加入到任何区域中），并在 /etc/config/gfw-vpn 中设置相应的规则**
+ * **修改Openwrt上的 /etc/config/gfw-dualpptp 使主/辅VPN链接名称和上一步设置中的一致**
  * **全部设置好后重启主/辅VPN服务器和Openwrt即可使用双线VPN了**
 
 # 后记
- * 在实际使用中可能需要调整上面脚本中的mtu值以保证ip包不会被拆分, 或因为mtu过小而被丢弃
- * 之所以使用ec2做主vpn是因为其网络质量非常稳定（相较于其他低端VPS，高端的我没用过不清楚），在几百小时D3游戏时间中除了暴雪自身服务器出问题，从来没有掉线过。
- * **注：如果你同时还在使用multiwan的话可能需要修改Openwrt上的mark以兼容multiwan**
+ * 在实际使用中可能需要调整上面脚本及配置中的mtu值以保证ip包不会被拆分, 或因为mtu过小而被丢弃
+ * 为了更好的性能，也可以给服务器打内核补丁并使用 accel-pptp 作为pptp服务器和客户端。由于服务器的版本众多，如果你感兴趣的话可以手动移植 [kernel_patch](kernel_patch) 到你所使用的服务器上
+ * **注：如果你同时还在使用multiwan的话可能需要修改Openwrt上 ip-up-wall 脚本中的mark以兼容multiwan**
