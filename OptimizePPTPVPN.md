@@ -1,9 +1,9 @@
 # 介绍
 Openwrt 12.09 和 14.07 所用的内核pptp不支持缓存数据包，而这个功能对于双线VPN至关重要，因此该文将解决这个问题，同时优化下性能。  
 补丁放在了 [kernel_patch](kernel_patch)：  
-pptp_accept_seq_window.patch 为内核pptp加入了缓存数据包的功能，默认是最多缓存0.333秒和最多2048个包，如果你修改该值，请务必保证其为2的N次方，否则在序列号由0xffffffff变为0的时候会出bug。另外判断超时没有使用timer，而是需要有数据包到达，这么做的理由是如果数据包重要的话，对方也会重新发送的，即使对方不发，链路上的定时echo请求也会触发超时判断。  
-arc4_add_ecd.patch 和 arc4_use_u32_for_ctx.patch 是backport上游的修改到Openwrt 12.09所用的内核，提升了mppe加密的性能，Openwrt 14.07不需要打这两个补丁  
-arc4_openssl_high_perf.patch 是将openssl的加密代码移植到内核，加/解密性能提升在路由器上非常明显
+**pptp_accept_seq_window.patch** 为内核pptp加入了缓存数据包的功能，默认是最多缓存0.333秒和最多2048个包，如果你修改该值，请务必保证其为2的N次方，否则在序列号由0xffffffff变为0的时候会出bug。另外判断超时没有使用timer，而是需要有数据包到达，这么做的理由是如果数据包重要的话，对方也会重新发送的，即使对方不发，链路上的定时echo请求也会触发超时判断。  
+**arc4_add_ecd.patch** 和 **arc4_use_u32_for_ctx.patch** 是backport上游的修改到Openwrt 12.09所用的内核，提升了mppe加密的性能，Openwrt 14.07不需要打这两个补丁  
+**arc4_openssl_high_perf.patch** 是将openssl的加密代码移植到内核，加/解密性能提升在路由器上非常明显
 
 # 解决方法
  * 如果使用的是Openwrt 12.09，则将 [12.09](kernel_patch/12.09) 下的4个文件复制到编译环境的 target/linux/generic/patches-3.3 目录，重新编译即可
@@ -18,11 +18,12 @@ Duplicated: 3944
 Lost: 1
 ```
 
-其中 Accepted 是收到实际有效的数据包数量（既交给上层应用的数据包数量）  
-Under Window 有两种情况触发，一种是从较快的VPN链路上已经收到了所有包，之后从较慢的VPN链路上收到的重复包会计入该值。第二种情况是某个包在超时之后才收到，虽然对于VPN链路来说不算丢包，但对于上层应用在之前触发超时的时候就已经发生了丢包  
-Buffered 是收到不连续包的数量，通常是由于其中一条或多条VPN链路不稳定导致，Buffered/Accepted的比值越大说明越不稳定  
-Duplicated 是收到的确定重复的数据包数量。和 Under Window 的区别在于 Under Window 不能确定就是重复包导致的，而 Duplicated 可以保证是重复包造成的。如果没有发生某个包在超时之后才收到，那么 Under Window + Duplicated = 收到的总重复包数量  
-Lost 是最终的丢包数量（既上层应用感知到的丢包数量），这个值通常是从1开始的。如果你发现这个值为0，则说明你使用的VPN服务器有bug  
+其中 **Accepted** 是收到实际有效的数据包数量（既交给上层应用的数据包数量）  
+**Under Window** 有两种情况触发，一种是从较快的VPN链路上已经收到了所有包，之后从较慢的VPN链路上收到的重复包会计入该值。第二种情况是某个包在超时之后才收到，虽然对于VPN链路来说不算丢包，但对于上层应用在之前触发超时的时候就已经发生了丢包  
+**Buffered** 是收到不连续包的数量，通常是由于其中一条或多条VPN链路不稳定导致，Buffered/Accepted的比值越大说明越不稳定  
+**Duplicated** 是收到的确定重复的数据包数量。和 Under Window 的区别在于 Under Window 不能确定就是重复包导致的，而 Duplicated 可以保证是重复包造成的。如果没有发生某个包在超时之后才收到，那么 Under Window + Duplicated = 收到的总重复包数量  
+**Lost** 是最终的丢包数量（既上层应用感知到的丢包数量），这个值通常是从1开始的。如果你发现这个值为0，则说明你使用的VPN服务器有bug  
+  
 对于双线VPN的主链接，Accepted + (Lost - 1) * 2 - Under Window - Duplicated = 主VPN链路的丢包数量 + 辅VPN链路的丢包数量  
 对于单线VPN或双线VPN的辅链接，Duplicated应为0，(Lost - 1) - Under Window = VPN链路的丢包数量
 
