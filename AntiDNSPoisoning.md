@@ -25,6 +25,7 @@
 
 # 解决方法
  * **使用预编译的 [gfw-dns](gfw/gfw-dns_0.1.2_all.ipk) 或根据 [UsePackage](UsePackage.md) 自己编译安装**
+ * **执行 /etc/init.d/gfw-dns enable 将该脚本设置成自动启动**
  * **修改 /etc/config/dhcp 将ISP的DNS服务器返回不存在域名的IP地址加入黑名单**
 
 ```
