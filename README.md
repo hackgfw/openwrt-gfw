@@ -2,7 +2,7 @@ Openwrt的翻墙解决方案
 ===========
 
 # 使用方法
-从 [gfw](gfw) 下载预编译好的ipk包（该包适用于所有平台）上传到路由器上并执行 opkg install 安装，如果有兴趣重新编译的话可以参见: [UsePackage](UsePackage.md)  
+从 [gfw](gfw) 下载预编译好的ipk包（该包适用于所有平台）上传到路由器上并执行 opkg update 和 opkg install 安装，如果有兴趣重新编译的话可以参见: [UsePackage](UsePackage.md)  
 
 * gfw-dns: 不用VPN就能避免DNS污染，同时还能使用本地CDN: [AntiDNSPoisoning](AntiDNSPoisoning.md)
 * gfw-vpn: 通过VPN翻墙的同时又能使用本地线路访问国内网络: [PPTPVPN](PPTPVPN.md)
