@@ -51,7 +51,7 @@ config zone
 注：如果你看到的是 list network 'wan' 的话，则再加一行 list network 'wall' 即可
 
  * 可以根据需要添加/修改/删除 /etc/config/gfw-vpn 中的rule，符合rule的数据包会走VPN，目前只支持tcp和udp协议。其中的interface选项为之前添加的VPN接口名称，不同的rule可以走不同的VPN接口（例如：上网走vpn1，游戏走vpn2）
- * 如果你没有使用 [gfw-dns](AntiDNSPoisoning.md) 防DNS污染，则需要取消注释 /etc/config/gfw-vpn 中的 dns 规则，通过VPN线路使用国外DNS进行域名解析
+ * 由于 2014-12-31 GFW 升级，还需要取消注释 /etc/config/gfw-vpn 中的 dns 规则，通过VPN线路使用国外DNS进行域名解析
  * 可以根据需要把不翻墙的源ip或目标ip加入 /etc/config/gfw-vpn.whiteip ，例如
 
 ```
