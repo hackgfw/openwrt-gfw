@@ -1,47 +1,84 @@
 **UPDATE:**  
-**2014-12-31: GFW疑似随机返回IP地址，本文的方法已经失效，目前可以使用后记中提到的自建DNS递归查询服务器来避免DNS污染同时又不失本地CDN加速**
+**2014-12-31: 从 2014-12-31 起GFW大幅扩大返回的错误IP地址范围，而且部分IP有正规网站在运行，如果用iptables过滤掉会导致访问不了对应的网站，因此之前的防污染办法不再有效**
 
 # 介绍
 由于GFW的域名黑名单是不断变化的，如果所有DNS查询都走VPN会丧失CDN加速功能，经常出现本地电信线路，但是却访问网站的联通线路，而且当VPN线路不稳定的时候，会影响所有网站的访问。如果使用域名白名单或黑名单，对于经常访问外国网站的用户，体验很不好，需要用户自己维护域名列表。
-该文章介绍如何通过判断并丢弃包含特征IP的DNS包来防止DNS污染，但是又不会失去本地DNS的CDN加速功能，而且还不需要VPN。
+该文章介绍如何通过自建DNS递归服务器来防止DNS污染，但是又不会失去本地DNS的CDN加速功能。
 
 # 原理
 分析：
- * GFW污染掉的域名返回的IP是有限的，即使用不提供的DNS服务的国外IP地址作为DNS服务器查询被污染的域名，GFW也会返回解析出的错误IP地址。
- * 使用提供DNS服务的国外IP地址作为DNS服务器查询被污染的域名，GFW会返回解析出的错误IP地址，但是正确的IP地址也会在随后被返回。
- * 使用本地ISP提供的DNS查询被污染的域名，由于DNS的逐级查询，而且域名在国外，查询过程会通过GFW，因此查到的结果也是被GFW污染的，但是和上面不同，这次不会返回正确的IP
- * 另外GFW除了会返回被污染的IP同时，还有可能返回不包含任何查询结果的应答,Answer RRs 和 Authority RRs 均为0. 这个正常情况是不会出现的。即使查询完全不存在的域名，其应答也会包含根服务器的Authority记录
-
-解决思路：
- * 为了使用本地CDN，DNS列表需要同时包含本地ISP提供的DNS服务器和国外的DNS比如8.8.8.8，并将dnsmasq设置成同时查询所有服务器
- * 多次查询被污染的域名，获得GFW返回的错误IP列表
- * 使用iptables判断DNS数据包是否包含被污染的IP，如果是则直接丢弃
- * 使用iptables判断DNS数据包是否不包含任何查询结果，如果是则直接丢弃
+ * 对于一个DNS请求，递归服务器是从根域名开始查询的，然后再查询顶级域名服务器，再逐级查到所请求的域名，这个过程如果配合[gfw-vpn](PPTPVPN.md)通过VPN连接位于国外的域名服务器可以避免GFW污染，而如果待查询的域名服务器在国内则通过本地线路连接，这样得到的结果也是经过CDN加速的了（国内域名不存在被污染的问题，有关部门可以直接拔网线）。
 
 好处：
- * 只要有任意一个本地DNS服务器的返回速度快于国外的（通常本地DNS的返回速度都是会快于国外的，毕竟距离在那里摆着的），查询的结果就是经过CDN加速的
- * 如果查的是被污染的域名，包含被污染IP的数据包会被丢弃，最终会由国外DNS返回正确的IP，可以避免DNS污染
- * DNS查询不需要通过VPN通道，即使VPN再不稳定，用户也可以正常查询DNS
+ * 只要能建立一条到国外的VPN线路，不管GFW怎么折腾，DNS查询结果都不会被污染，同时也是经过CDN加速的
 
 坏处：
- * 一开始为了获得GFW返回的错误IP列表，多次查询被污染的域名，耗时过长
+ * DNS查询需要通过VPN通道，如果VPN不稳定，会影响域名解析，进而导致网页打不开
+ * DNS解析延迟相比直接使用 114.114.114.114 和 8.8.8.8 之类的公共域名解析服务器要高不少，因为 114.114.114.114 和 8.8.8.8 用的人多，很多域名都在缓存里，可以立即返回结果。
 
 # 解决方法
- * **使用预编译的 [gfw-dns](gfw/gfw-dns_0.1.2_all.ipk) 或根据 [UsePackage](UsePackage.md) 自己编译安装**
- * **执行 /etc/init.d/gfw-dns enable 将该脚本设置成自动启动**
- * **修改 /etc/config/dhcp 将ISP的DNS服务器返回不存在域名的IP地址加入黑名单**
-
+ * **执行 opkg update 更新软件仓库列表**
+ * **执行 opkg install bind-server 安装递归解析服务器**
+ * **执行 /etc/init.d/named enable 将 bind 设置为自动启动**
+ * **修改 /etc/config/dhcp 禁用 dnsmasq 的 DNS 解析功能，在选项里加入一行**
 ```
-list bogusnxdomain     '63.251.179.17'
+option port '0'
 ```
+ * **由于关闭 dnsmasq 的 DNS 功能后，dnsmasq 不会在DHCP应答里推送 DNS 服务器，因此还需要在 /etc/config/dhcp 里手动指定 DNS 服务器，找到类似**
+```
+config dhcp 'lan'
+        option interface 'lan'
+        option start '64'
+        option limit '63'
+        option leasetime '12h'
+```
+ 加入一行 list dhcp_option '6,0.0.0.0'
+```
+config dhcp 'lan'
+        option interface 'lan'
+        option start '64'
+        option limit '63'
+        option leasetime '12h'
+        list dhcp_option '6,0.0.0.0'
+```
+ 如果还需要指定更多的备用服务器可以用  list dhcp_option '6,0.0.0.0,8.8.8.8'
+ * **修改 /etc/config/gfw-vpn 取消注释dns相关的那几行，以便通过VPN连接位于国外的域名服务器**
+ * bind 的启动顺序比较靠前，有时甚至在网络初始化之前，导致其找不到正确的网络接口，可以在 /etc/bind/named.conf 中找到
+```
+options {
+        directory "/tmp";
 
- 你需要将上面的 63.251.179.17 替换掉。比如你向ISP的DNS查询 non.exist.domain，按规范应该返回NXDOMAIN，表示该域名不存在，但是运营商通常会返回一个他自己的地址，然后将你导向到其广告页。你需要将运营商返回的那个IP添加到bogusnxdomain中。
+        // If your ISP provided one or more IP addresses for stable
+        // nameservers, you probably want to use them as forwarders.
+        // Uncomment the following block, and insert the addresses replacing
+        // the all-0's placeholder.
 
- * 可以手工修改 /etc/config/gfw-dns 添加/删除域名，不过一般情况下默认的配置应该就能很好的工作了。由于在查询GFW返回的错误IP时，使用了被污染域名本身作为DNS服务器，因此如果以后GFW将该域名解禁，查询将不返回任何结果（但是会超时，使得耗时更长），并不会影响结果。放入配置中的域名应保证该域名以后不会提供DNS解析服务，同时该域名也不太容易被GFW解封
- * 如果你没有使用VPN或VPN没有推送DNS服务器，则需要将国内和国外的DNS服务器都加入到wan口的配置中
- * 有时脚本启动时并不能找到所有的被污染IP，可以在启动完成后再次执行 /etc/init.d/gfw-dns start 查找新的被污染IP并将其过滤掉，另外执行 /etc/init.d/gfw-dns stop 将停止DNS防污染保护
- * 目前查询 8.8.8.8 和 8.8.4.4 的丢包有时会高达 50%，可以把多个 8.8.8.8 和 8.8.4.4 添加到VPN接口或wan口的DNS配置中。例如将5个8.8.8.8和8.8.4.4共10个服务器添加到VPN接口后，查询被污染域名而得不到结果的概率会降低到 0.09%
+        // forwarders {
+        //      0.0.0.0;
+        // };
+......
+......
+......
+};
+```
+ 加入一行 interface-interval 1; 
+```
+options {
+        directory "/tmp";
 
-# 后记
- * 从目前的趋势看，估计GFW以后很有可能会在骨干路由上直接丢弃国外DNS返回的正确数据包，导致无法收到正确的DNS结果。如果这项功能正式部署，可以通过VPN发送DNS请求，以上提到的防止DNS污染的同时又不会失去本地DNS的CDN加速功能依然能够实现，只不过需要一条VPN连接来联系国外DNS服务器。
- * 另一种DNS防污染同时又不失CDN加速的方法是自建一个DNS递归查询服务器，通过VPN线路查询 nameserver 位于国外的域名，通过本地线路查询 nameserver 位于国内的域名，不过这个办法依赖VPN而且实测下来DNS解析延迟太高。测试了下查询 Alexa Top 500 网站使用该文的方法平均响应时间是30ms，而用自建的DNS递归服务器有400ms
+        // If your ISP provided one or more IP addresses for stable
+        // nameservers, you probably want to use them as forwarders.
+        // Uncomment the following block, and insert the addresses replacing
+        // the all-0's placeholder.
+
+        // forwarders {
+        //      0.0.0.0;
+        // };
+        interface-interval 1;
+......
+......
+......
+};
+```
+ 另其每分钟都重新查询网络接口
+ * 如果之前有安装 gfw-dns，可以通过 opkg remove gfw-dns 卸载
