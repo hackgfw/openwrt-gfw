@@ -8,6 +8,6 @@
     ./scripts/feeds update -a
     ./scripts/feeds install -a
     
-就可以在 make menuconfig 里的 Network 类别下找到 gfw-*
+就可以在 make menuconfig 里的 Network 类别下找到 gfw-vpn gfw-dualpptp 及 fastdns
 
 关于各包的配置可参见 [README](README.md)
