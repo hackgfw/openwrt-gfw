@@ -2,9 +2,9 @@ Openwrt的翻墙解决方案
 ===========
 
 # 使用方法
-从 [gfw](gfw) 下载预编译好的ipk包（该包适用于所有平台）上传到路由器上并执行 opkg update 和 opkg install 安装，如果有兴趣重新编译的话可以参见: [UsePackage](UsePackage.md)  
+从 [gfw](gfw) 下载预编译好的ipk包(目前 fastdns 还需要手工编译)上传到路由器上并执行 opkg update 和 opkg install 安装，如果有兴趣重新编译的话可以参见: [UsePackage](UsePackage.md)  
 
-* gfw-dns: 使用VPN避免DNS污染，同时还能使用本地CDN: [AntiDNSPoisoning](AntiDNSPoisoning.md)
+* fastdns: 使用VPN避免DNS污染，同时还能使用本地CDN: [AntiDNSPoisoning](AntiDNSPoisoning.md)
 * gfw-vpn: 通过VPN翻墙的同时又能使用本地线路访问国内网络: [PPTPVPN](PPTPVPN.md)
 * gfw-dualpptp: 使用双线VPN翻墙，即使其中一条线路断线也能正常翻墙，同时还能降低丢包率: [DualLinePPTPVPN](DualLinePPTPVPN.md)
 * 优化内核pptp性能，同时使其支持缓存数据包功能: [OptimizePPTPVPN](OptimizePPTPVPN.md)
@@ -19,7 +19,7 @@ Openwrt的翻墙解决方案
 
 而本系列解决了:
 * DNS CDN的问题，而且不需要维护域名列表，虽然我天天都在用GitHub，但是Github被域名污染我是看了新闻才知道的。整个解决方案只需一次设置，其后就可以不管了。
-* 没有引入新的安全问题，虽然PPTP不安全，但是提供了至少和不翻墙一样的安全程度，HTTP依然是HTTP，HTTPS依然是HTTPS，也不需要在翻墙终端上装任何软件或进行任何设置。
+* 没有引入新的安全问题(fastdns除外)，虽然PPTP不安全，但是提供了至少和不翻墙一样的安全程度，HTTP依然是HTTP，HTTPS依然是HTTPS，也不需要在翻墙终端上装任何软件或进行任何设置。
 * 全平台多设备支持，因为是设置在路由器上的，所以对路由器后的设备完全透明。
 * 基本没有性能损耗，和正常上网的平均（注1）速度一样。
 * 虽然用到了中国地区的ip段，但是鉴于ipv4地址也分配的差不多了，这个数据的更新并不频繁，这次更新本系列做了个最新的cn.zone，和我两年前生成的只有20多行不一样。另外即使不更新，也不会撞墙。
