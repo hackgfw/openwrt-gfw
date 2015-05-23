@@ -1,6 +1,3 @@
-**UPDATE:**  
-**2014-12-31: 从 2014-12-31 起GFW大幅扩大返回的错误IP地址范围，而且部分IP有正规网站在运行，如果用iptables过滤掉会导致访问不了对应的网站，因此之前的防污染办法不再有效，本次更新了新方法以应对GFW的升级**
-
 # 介绍
 由于GFW的域名黑名单是不断变化的，如果所有DNS查询都走VPN会丧失CDN加速功能，经常出现本地电信线路，但是却访问网站的联通线路，而且当VPN线路不稳定的时候，会影响所有网站的访问。如果使用域名白名单或黑名单，对于经常访问外国网站的用户，体验很不好，需要用户自己维护域名列表。
 该文章介绍如何通过自建DNS递归服务器来防止DNS污染，但是又不会失去本地DNS的CDN加速功能。
@@ -16,10 +13,9 @@
  * DNS查询需要通过VPN通道，如果VPN不稳定，会影响域名解析，进而导致网页打不开
  * DNS解析延迟相比直接使用 114.114.114.114 和 8.8.8.8 之类的公共域名解析服务器要高不少，因为 114.114.114.114 和 8.8.8.8 用的人多，很多域名都在缓存里，可以立即返回结果。
 
-# 解决方法
- * **执行 opkg update 更新软件仓库列表**
- * **执行 opkg install bind-server 安装递归解析服务器**
- * **执行 /etc/init.d/named enable 将 bind 设置为自动启动**
+# 解决方法1 - 使用 [fastdns](https://github.com/hackgfw/fastdns)
+ * **参照 [UsePackage](UsePackage.md) 编译并安装 [fastdns](https://github.com/hackgfw/fastdns)**
+ * **执行 /etc/init.d/fastdns enable 将 fastdns 设置为自动启动**
  * **修改 /etc/config/dhcp 禁用 dnsmasq 的 DNS 解析功能，在选项里加入一行**
 ```
 option port '0'
@@ -43,6 +39,31 @@ config dhcp 'lan'
 ```
  如果还需要指定更多的备用服务器可以用  list dhcp_option '6,0.0.0.0,8.8.8.8'
  * **修改 /etc/config/gfw-vpn 取消注释dns相关的那几行，以便通过VPN连接位于国外的域名服务器**
+ * **最后重启路由器**
+ * fastdns 的安全性不如 bind, 如果你对安全比较在意, 请使用解决方法2
+ * 默认 fastdns 是链接到 libstdcpp(uclibc++性能太差了), 因此安装时需要装两个包, 体积比较大, 如果你之前没有安装过 libstdcpp, 可以考虑静态链接, 将 Makefile 中的
+```
+DEPENDS += +libstdcpp +librt
+```
+替换为
+```
+DEPENDS += +librt
+```
+再将
+```
+CXXFLAGS="$$$$CXXFLAGS -DNDEBUG -fno-exceptions -fno-builtin -fno-rtti" \
+```
+替换为
+```
+CXXFLAGS="$$$$CXXFLAGS -DNDEBUG -fno-exceptions -fno-builtin -fno-rtti -static-libstdc++" \
+```
+
+# 解决方法2 - 使用 bind
+ * **执行 opkg update 更新软件仓库列表**
+ * **执行 opkg install bind-server 安装递归解析服务器**
+ * **执行 /etc/init.d/named enable 将 bind 设置为自动启动**
+ * **参照解决方法1禁用 dnsmasq 的 DNS 解析功能, 设置推送 DNS 服务器并修改 gfw-vpn 配置**
+ * **最后重启路由器**
  * bind 的启动顺序比较靠前，有时甚至在网络初始化之前，导致其找不到正确的网络接口，可以在 /etc/bind/named.conf 中找到
 ```
 options {
