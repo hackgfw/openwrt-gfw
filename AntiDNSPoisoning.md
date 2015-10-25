@@ -38,7 +38,6 @@ config dhcp 'lan'
         list dhcp_option '6,0.0.0.0'
 ```
  如果还需要指定更多的备用服务器可以用  list dhcp_option '6,0.0.0.0,8.8.8.8'
- * **修改 /etc/config/gfw-vpn 取消注释dns相关的那几行，以便通过VPN连接位于国外的域名服务器**
  * **最后重启路由器**
  * fastdns 的安全性不如 bind, 如果你对安全比较在意, 请使用解决方法2
  * 默认 fastdns 是链接到 libstdcpp(uclibc++性能太差了), 因此安装时需要装两个包, 体积比较大, 如果你之前没有安装过 libstdcpp, 可以考虑静态链接, 将 Makefile 中的
@@ -62,7 +61,7 @@ CXXFLAGS="$$$$CXXFLAGS -DNDEBUG -fno-exceptions -fno-builtin -fno-rtti -static-l
  * **执行 opkg update 更新软件仓库列表**
  * **执行 opkg install bind-server 安装递归解析服务器**
  * **执行 /etc/init.d/named enable 将 bind 设置为自动启动**
- * **参照解决方法1禁用 dnsmasq 的 DNS 解析功能, 设置推送 DNS 服务器并修改 gfw-vpn 配置**
+ * **参照解决方法1禁用 dnsmasq 的 DNS 解析功能并设置推送 DNS 服务器**
  * **最后重启路由器**
  * bind 的启动顺序比较靠前，有时甚至在网络初始化之前，导致其找不到正确的网络接口，可以在 /etc/bind/named.conf 中找到
 ```
