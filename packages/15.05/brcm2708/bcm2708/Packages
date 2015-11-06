@@ -1,0 +1,46 @@
+Package: fastdns
+Version: 0.1.4
+Depends: libc, libstdcpp, librt
+Source: feeds/gfw/fastdns
+Section: net
+Maintainer: hackgfw <hackgfw@outlook.com>
+Architecture: brcm2708
+Installed-Size: 19779
+Filename: fastdns_0.1.4_brcm2708.ipk
+Size: 20541
+MD5Sum: a80d42897628638fd81fc61c6971d75f
+SHA256sum: 46188f11146382a9340bb7c39cc44a9a261e8b0f155d3f8f23798eca545f334e
+Description:  Fast Recursive DNS Server
+ For more information, please refer to https://github.com/hackgfw/fastdns
+
+Package: gfw-dualpptp
+Version: 0.2
+Depends: libc, ip, iptables-mod-tee, iptables-mod-u32
+Source: feeds/gfw/gfw-dualpptp
+Section: net
+Maintainer: hackgfw <hackgfw@aim.com>
+Architecture: all
+Installed-Size: 1640
+Filename: gfw-dualpptp_0.2_all.ipk
+Size: 2678
+MD5Sum: d41156bb93ce6225ec4407382781d4a7
+SHA256sum: 50804443a15924234a15f9a02a1ff062502fa6c04c72550827b27dcd01304e48
+Description:  VPN script to use redundant connecions, like RAID1 for VPN.
+ Only pptp is supported, also need to patch kernel manually for OpenWRT 12.09 or later.
+ For more information, please refer to https://github.com/hackgfw/openwrt-gfw
+
+Package: gfw-vpn
+Version: 0.2.2
+Depends: libc, ip, ipset, iptables-mod-ipopt, conntrack-tools
+Source: feeds/gfw/gfw-vpn
+Section: net
+Maintainer: hackgfw <hackgfw@aim.com>
+Architecture: all
+Installed-Size: 14288
+Filename: gfw-vpn_0.2.2_all.ipk
+Size: 15263
+MD5Sum: 6a8f485d6a5126df89b76339ff66189d
+SHA256sum: cd1391d572307390f19a6a31eb84e5605aa5d99b2d0e883eb5f214cf0a33b30a
+Description:  VPN script to tear down gfw
+ For more information, please refer to https://github.com/hackgfw/openwrt-gfw
+
