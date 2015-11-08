@@ -14,7 +14,7 @@
  * DNS解析延迟相比直接使用 114.114.114.114 和 8.8.8.8 之类的公共域名解析服务器要高不少，因为 114.114.114.114 和 8.8.8.8 用的人多，很多域名都在缓存里，可以立即返回结果。
 
 # 解决方法1 - 使用 [fastdns](https://github.com/hackgfw/fastdns)
- * **参照 [UsePackage](UsePackage.md) 编译并安装 [fastdns](https://github.com/hackgfw/fastdns)**
+ * **使用预编译的 [fastdns](packages) 或根据 [UsePackage](UsePackage.md) 自己编译安装**
  * **执行 /etc/init.d/fastdns enable 将 fastdns 设置为自动启动**
  * **修改 /etc/config/dhcp 禁用 dnsmasq 的 DNS 解析功能，在选项里加入一行**
 ```
