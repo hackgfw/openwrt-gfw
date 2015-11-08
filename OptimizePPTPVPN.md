@@ -1,13 +1,14 @@
 # 介绍
-Openwrt 12.09 和 14.07 所用的内核pptp不支持缓存数据包，而这个功能对于双线VPN至关重要，因此该文将解决这个问题，同时优化下性能。  
+Openwrt 12.09、14.07和15.05所用的内核pptp不支持缓存数据包，而这个功能对于双线VPN至关重要，因此该文将解决这个问题，同时优化下性能。  
 补丁放在了 [kernel_patch](kernel_patch)：  
 **pptp_accept_seq_window.patch** 为内核pptp加入了缓存数据包的功能，默认是最多缓存0.333秒和最多2048个包，如果你修改该值，请务必保证其为2的N次方，否则在序列号由0xffffffff变为0的时候会出bug。另外判断超时没有使用timer，而是需要有数据包到达，这么做的理由是如果数据包重要的话，对方也会重新发送的，即使对方不发，链路上的定时echo请求也会触发超时判断。  
-**arc4_add_ecd.patch** 和 **arc4_use_u32_for_ctx.patch** 是backport上游的修改到Openwrt 12.09所用的内核，提升了mppe加密的性能，Openwrt 14.07不需要打这两个补丁  
+**arc4_add_ecd.patch** 和 **arc4_use_u32_for_ctx.patch** 是backport上游的修改到Openwrt 12.09所用的内核，提升了mppe加密的性能，Openwrt 14.07和15.05不需要打这两个补丁  
 **arc4_openssl_high_perf.patch** 是将openssl的加密代码移植到内核，加/解密性能提升在路由器上非常明显
 
 # 解决方法
  * 如果使用的是Openwrt 12.09，则将 [12.09](kernel_patch/12.09) 下的4个文件复制到编译环境的 target/linux/generic/patches-3.3 目录，重新编译即可
  * 如果使用的是Openwrt 14.07，则将 [14.07](kernel_patch/14.07) 下的2个文件复制到编译环境的 target/linux/generic/patches-3.10 目录，重新编译即可
+ * 如果使用的是Openwrt 15.05，则将 [15.05](kernel_patch/15.05) 下的2个文件复制到编译环境的 target/linux/generic/patches-3.18 目录，重新编译即可
  * 打上补丁后VPN链接的统计信息会放到 /proc/pptp/ 下，例如执行 cat /proc/pptp/pptp-wall 会显示
 
 ```
