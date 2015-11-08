@@ -4,7 +4,7 @@
 
 # 前期准备
  * 两台国外服务器，均需要有root权限以修改服务器设置。OpenVZ服务器即可，不过需要OpenVZ加载对应的内核模块。另外还需要公网ip或位于Stateless NAT后，即只映射ip而不改变端口（例如ec2的NAT）
- * 一台运行 Openwrt 12.09 或 14.07 的路由器且必须能取得公网IP (位于Stateless NAT后或许也可以，不过未测试过)
+ * 一台运行 Openwrt 12.09、14.07或15.05的路由器且必须能取得公网IP (位于Stateless NAT后或许也可以，不过未测试过)
  * 给Openwrt使用的内核pptp打补丁，详见[OptimizePPTPVPN](OptimizePPTPVPN.md)
 
 
@@ -30,7 +30,7 @@
 
 
 # 解决方法
- * **使用预编译的 [gfw-dualpptp](gfw/gfw-dualpptp_0.2_all.ipk) 或根据 [UsePackage](UsePackage.md) 自己编译安装到Openwrt路由器上**
+ * **使用预编译的 [gfw-dualpptp](packages) 或根据 [UsePackage](UsePackage.md) 自己编译安装到Openwrt路由器上**
  * **修改所有主机（主/辅VPN服务器和Openwrt）上的 /etc/sysctl.conf 加入**
 
 ```
